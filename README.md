@@ -1,73 +1,221 @@
-# Welcome to your Lovable project
+# MacroData Warehouse
 
-## Project info
+A private macroeconomic data warehouse with web dashboard for fetching, storing, and visualizing time series data from multiple sources.
 
-**URL**: https://lovable.dev/projects/7ccff690-fd33-4c6a-bc4a-e73c5ec18fe4
+## Features
 
-## How can I edit this code?
+- **Multi-Source Data Integration**
+  - FRED (Federal Reserve Economic Data)
+  - Statistics Finland (StatFin) via PxWeb API
+  
+- **Database Storage**
+  - PostgreSQL database with normalized schema
+  - Currency conversion support (EUR/USD)
+  - Time series observations with metadata
+  
+- **REST API**
+  - Query series by source and search terms
+  - Fetch observations with date range filters
+  - Currency selection (original, EUR, USD)
+  
+- **Web Dashboard**
+  - Search and filter time series
+  - Interactive charts with Recharts
+  - Data tables with observations
+  - Currency and date range controls
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Lovable Cloud (Supabase), Edge Functions
+- **Database**: PostgreSQL with Row Level Security
+- **APIs**: FRED API, StatFin PxWeb API
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/7ccff690-fd33-4c6a-bc4a-e73c5ec18fe4) and start prompting.
+## Database Schema
 
-Changes made via Lovable will be committed automatically to this repo.
+### Tables
 
-**Use your preferred IDE**
+1. **series** - Time series metadata
+   - `id`: Internal identifier (e.g., "FRED_GDPC1")
+   - `source`: Data source ("FRED" or "STATFIN")
+   - `provider_id`: Original series/table ID
+   - `title`, `description`, `freq`, `unit_original`, `currency_orig`, `geo`
+   - `created_at`, `updated_at`
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. **observations** - Time series data points
+   - `id`: Auto-increment primary key
+   - `series_id`: Foreign key to series
+   - `date`: Observation date
+   - `value`: Original value
+   - `value_eur`, `value_usd`: Normalized values
+   - `last_update`: Timestamp
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+3. **fx_rates** - Currency exchange rates
+   - `id`: Auto-increment primary key
+   - `date`: Rate date
+   - `base`, `quote`: Currency pair
+   - `rate`: Exchange rate
+   - `source`: Rate source
 
-Follow these steps:
+## Getting Started
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+### Prerequisites
+
+- Node.js 18+ and npm
+- FRED API key (get one at https://fred.stlouisfed.org/docs/api/api_key.html)
+
+### Installation
+
+1. Clone the repository:
+```bash
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+2. Install dependencies:
+```bash
+npm install
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+3. Set up your FRED API key:
+   - Go to the Cloud tab in Lovable
+   - Navigate to Secrets
+   - Add `FRED_API_KEY` with your API key
+
+4. Start the development server:
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at http://localhost:8080
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Usage
 
-**Use GitHub Codespaces**
+### Ingesting Data
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+To ingest data from FRED or StatFin, use the backend edge functions:
 
-## What technologies are used for this project?
+**FRED Example:**
+```typescript
+import { fredApi } from "@/lib/api";
 
-This project is built with:
+// Ingest US Real GDP (GDPC1)
+await fredApi.ingest("GDPC1");
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**StatFin Example:**
+```typescript
+import { statfinApi } from "@/lib/api";
 
-## How can I deploy this project?
+// Ingest Finnish GDP data
+await statfinApi.ingest("StatFin/kbar/statfin_kbar_pxt_11cc.px", {
+  query: [
+    {
+      code: "Year",
+      selection: { filter: "item", values: ["2020", "2021", "2022"] }
+    }
+  ],
+  response: { format: "json" }
+});
+```
 
-Simply open [Lovable](https://lovable.dev/projects/7ccff690-fd33-4c6a-bc4a-e73c5ec18fe4) and click on Share -> Publish.
+### API Endpoints
 
-## Can I connect a custom domain to my Lovable project?
+The backend provides these edge functions:
 
-Yes, you can!
+1. **fetch-fred** - FRED API integration
+   - `?action=search&query=gdp` - Search series
+   - `?action=metadata&seriesId=GDPC1` - Get metadata
+   - `?action=observations&seriesId=GDPC1` - Get observations
+   - `?action=ingest&seriesId=GDPC1` - Ingest into database
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+2. **fetch-statfin** - StatFin API integration
+   - `?action=databases` - List databases
+   - `?action=tables&databasePath=StatFin` - List tables
+   - `?action=metadata&tablePath=...` - Get table metadata
+   - `?action=data&tablePath=...` - Fetch table data (POST)
+   - `?action=ingest&tablePath=...` - Ingest into database (POST)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Frontend Features
+
+- **Search**: Full-text search across series titles and IDs
+- **Filters**: Filter by data source (FRED/StatFin/All)
+- **Charts**: Interactive time series visualization
+- **Currency**: View data in original currency, EUR, or USD
+- **Date Range**: Filter observations by date range
+- **Details**: View series metadata and statistics
+
+## Data Sources
+
+### FRED (Federal Reserve Economic Data)
+
+- **Base URL**: https://api.stlouisfed.org/fred
+- **Authentication**: API key (query parameter)
+- **Coverage**: US economic indicators, financial data
+- **Documentation**: https://fred.stlouisfed.org/docs/api/fred/
+
+### Statistics Finland (StatFin)
+
+- **Base URL**: https://pxdata.stat.fi/PXWeb/api/v1
+- **Authentication**: None required (open API)
+- **Coverage**: Finnish statistics, demographics, economy
+- **Documentation**: https://pxdata.stat.fi/api1.html
+
+## Currency Normalization
+
+The system automatically normalizes values to EUR and USD:
+
+- **USD values**: Converted to EUR using FRED series `DEXUSEU` (USD per 1 EUR)
+- **EUR values**: Converted to USD using the inverse rate
+- **Original values**: Stored as-is in the `value` column
+
+## Development
+
+### Project Structure
+
+```
+src/
+├── components/         # React components
+│   ├── ui/            # shadcn/ui components
+│   ├── SeriesList.tsx # Series list view
+│   ├── SeriesDetail.tsx # Series detail view
+│   └── SeriesChart.tsx # Chart component
+├── pages/
+│   └── Index.tsx      # Main page
+├── lib/
+│   ├── api.ts         # API client
+│   └── utils.ts       # Utilities
+└── integrations/
+    └── supabase/      # Supabase client (auto-generated)
+
+supabase/
+├── functions/         # Edge functions
+│   ├── fetch-fred/    # FRED integration
+│   └── fetch-statfin/ # StatFin integration
+└── config.toml        # Function configuration
+```
+
+### Adding New Series
+
+1. Use the edge functions to ingest data
+2. The frontend will automatically pick up new series
+3. Series appear in the search and can be filtered by source
+
+## Deployment
+
+Deploy via Lovable:
+
+1. Click the **Publish** button in the top right
+2. Frontend changes require clicking "Update" in the publish dialog
+3. Backend changes (edge functions, database) deploy automatically
+
+## Resources
+
+- [Lovable Documentation](https://docs.lovable.dev/)
+- [Lovable Cloud Features](https://docs.lovable.dev/features/cloud)
+- [FRED API Docs](https://fred.stlouisfed.org/docs/api/fred/)
+- [StatFin PxWeb API](https://pxdata.stat.fi/api1.html)
+
+## License
+
+MIT

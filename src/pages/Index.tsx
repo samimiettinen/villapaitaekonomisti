@@ -27,9 +27,14 @@ const Index = () => {
                 <p className="text-sm text-muted-foreground">Economic time series analytics</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Database className="h-4 w-4" />
-              <span>FRED + StatFin</span>
+            <div className="flex items-center gap-4">
+              <a href="/admin" className="text-sm text-muted-foreground hover:text-primary">
+                Admin
+              </a>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Database className="h-4 w-4" />
+                <span>FRED + StatFin</span>
+              </div>
             </div>
           </div>
         </div>
