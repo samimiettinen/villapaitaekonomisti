@@ -28,6 +28,9 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <a href="/analysis" className="text-sm text-muted-foreground hover:text-primary">
+                Analysis Builder
+              </a>
               <a href="/admin" className="text-sm text-muted-foreground hover:text-primary">
                 Admin
               </a>
