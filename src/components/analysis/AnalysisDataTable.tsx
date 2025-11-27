@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { DataExporter } from "./DataExporter";
 import type { SelectedSeries, Transformation } from "@/pages/Analysis";
 import type { Currency } from "@/components/SeriesDetail";
 
@@ -146,7 +147,14 @@ export const AnalysisDataTable = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Data Table</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Data Table</CardTitle>
+          <DataExporter
+            data={data}
+            selectedSeries={selectedSeries}
+            transformations={transformations}
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[400px]">
