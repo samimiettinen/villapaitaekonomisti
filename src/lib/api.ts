@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const fredApi = {
   async search(query: string) {
@@ -15,7 +16,12 @@ export const fredApi = {
 
   async ingest(seriesId: string) {
     const url = `${SUPABASE_URL}/functions/v1/fetch-fred?action=ingest&seriesId=${seriesId}`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
     
     if (!response.ok) {
       const error = await response.json();
@@ -29,7 +35,12 @@ export const fredApi = {
 export const statfinApi = {
   async listDatabases() {
     const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=databases`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
     
     if (!response.ok) {
       const error = await response.json();
@@ -47,6 +58,8 @@ export const statfinApi = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ query }),
     });
