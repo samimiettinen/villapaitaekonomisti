@@ -5,13 +5,20 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const fredApi = {
   async search(query: string) {
-    const { data, error } = await supabase.functions.invoke("fetch-fred", {
-      body: {},
-      method: "GET",
+    const url = `${SUPABASE_URL}/functions/v1/fetch-fred?action=search&query=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
     });
-
-    if (error) throw error;
-    return data;
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to search series");
+    }
+    
+    return await response.json();
   },
 
   async ingest(seriesId: string) {

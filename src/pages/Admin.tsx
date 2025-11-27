@@ -4,15 +4,19 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Database, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Database, Loader2, CheckCircle2, AlertCircle, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fredApi, statfinApi } from "@/lib/api";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const Admin = () => {
   const { toast } = useToast();
   const [fredSeriesId, setFredSeriesId] = useState("GDPC1");
   const [fredLoading, setFredLoading] = useState(false);
   const [fredResult, setFredResult] = useState<any>(null);
+  const [fredSearchQuery, setFredSearchQuery] = useState("");
+  const [fredSearchResults, setFredSearchResults] = useState<any[]>([]);
+  const [fredSearchLoading, setFredSearchLoading] = useState(false);
 
   const [statfinTablePath, setStatfinTablePath] = useState("StatFin/kbar/statfin_kbar_pxt_11cc.px");
   const [statfinQuery, setStatfinQuery] = useState(`{
@@ -31,6 +35,30 @@ const Admin = () => {
 }`);
   const [statfinLoading, setStatfinLoading] = useState(false);
   const [statfinResult, setStatfinResult] = useState<any>(null);
+
+  const handleFredSearch = async () => {
+    if (!fredSearchQuery.trim()) return;
+    
+    setFredSearchLoading(true);
+    setFredSearchResults([]);
+    try {
+      const result = await fredApi.search(fredSearchQuery);
+      setFredSearchResults(result.results || []);
+      toast({
+        title: "Search Complete",
+        description: `Found ${result.results?.length || 0} series`,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to search";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setFredSearchLoading(false);
+    }
+  };
 
   const handleFredIngest = async () => {
     setFredLoading(true);
@@ -97,6 +125,74 @@ const Admin = () => {
       </header>
 
       <div className="container mx-auto px-6 py-8 space-y-8">
+        {/* FRED Search */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Search FRED Series</CardTitle>
+            <CardDescription>
+              Search for economic data series from FRED to find Series IDs
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                value={fredSearchQuery}
+                onChange={(e) => setFredSearchQuery(e.target.value)}
+                placeholder="Search for series (e.g., GDP, unemployment, inflation)"
+                onKeyDown={(e) => e.key === "Enter" && handleFredSearch()}
+              />
+              <Button onClick={handleFredSearch} disabled={fredSearchLoading || !fredSearchQuery.trim()}>
+                {fredSearchLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            {fredSearchResults.length > 0 && (
+              <ScrollArea className="h-[300px] rounded-md border p-4">
+                <div className="space-y-2">
+                  {fredSearchResults.map((series: any) => (
+                    <div
+                      key={series.id}
+                      className="flex items-start justify-between gap-4 rounded-lg border p-3 hover:bg-accent cursor-pointer"
+                      onClick={() => setFredSeriesId(series.id)}
+                    >
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">
+                            {series.id}
+                          </code>
+                          {series.frequency_short && (
+                            <span className="text-xs text-muted-foreground">
+                              {series.frequency_short}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium">{series.title}</p>
+                        {series.units && (
+                          <p className="text-xs text-muted-foreground">{series.units}</p>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFredSeriesId(series.id);
+                        }}
+                      >
+                        Select
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+
         {/* FRED Ingestion */}
         <Card>
           <CardHeader>
