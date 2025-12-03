@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, Search, Loader2, Download } from "lucide-react";
+import { TrendingUp, Search, Loader2, Download, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { fredApi } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { toast } from "@/hooks/use-toast";
 
 interface FredSeries {
@@ -16,23 +16,38 @@ interface FredSeries {
   units: string;
 }
 
-interface Observation {
-  date: string;
-  value: number | null;
+interface SelectedSeriesItem extends FredSeries {
+  axis: "left" | "right";
+  color: string;
 }
+
+type ChartDataPoint = {
+  date: string;
+  [key: string]: string | number | null;
+};
+
+const COLORS = [
+  "hsl(var(--primary))",
+  "hsl(221, 83%, 53%)",
+  "hsl(142, 71%, 45%)",
+  "hsl(38, 92%, 50%)",
+  "hsl(0, 84%, 60%)",
+  "hsl(280, 65%, 60%)",
+];
 
 const FredExplorer = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FredSeries[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selectedSeries, setSelectedSeries] = useState<FredSeries | null>(null);
+  const [selectedSeries, setSelectedSeries] = useState<SelectedSeriesItem[]>([]);
   const [dateRange, setDateRange] = useState({
     start: "2000-01-01",
     end: new Date().toISOString().split("T")[0],
   });
-  const [chartData, setChartData] = useState<Observation[]>([]);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loadingChart, setLoadingChart] = useState(false);
-  const [ingesting, setIngesting] = useState(false);
+  const [ingestingId, setIngestingId] = useState<string | null>(null);
+  const [seriesWithData, setSeriesWithData] = useState<Set<string>>(new Set());
 
   // Load example: US GDP per capita
   useEffect(() => {
@@ -40,7 +55,6 @@ const FredExplorer = () => {
   }, []);
 
   const loadExampleSeries = async () => {
-    // Try to load US GDP per capita if it exists in our database
     const { data: series } = await supabase
       .from("series")
       .select("*")
@@ -49,50 +63,85 @@ const FredExplorer = () => {
       .limit(1);
 
     if (series && series.length > 0) {
-      setSelectedSeries({
+      setSelectedSeries([{
         id: series[0].id,
         title: series[0].title,
         frequency: series[0].freq || "Quarterly",
         units: series[0].unit_original || "Dollars",
-      });
+        axis: "left",
+        color: COLORS[0],
+      }]);
     } else {
-      // Set default example series info
-      setSelectedSeries({
+      setSelectedSeries([{
         id: "A939RC0Q052SBEA",
         title: "GDP per capita (current dollars)",
         frequency: "Quarterly",
         units: "Dollars",
-      });
+        axis: "left",
+        color: COLORS[0],
+      }]);
     }
   };
 
   // Fetch chart data when series or date range changes
   useEffect(() => {
-    if (selectedSeries) {
+    if (selectedSeries.length > 0) {
       fetchChartData();
+    } else {
+      setChartData([]);
     }
   }, [selectedSeries, dateRange]);
 
   const fetchChartData = async () => {
-    if (!selectedSeries) return;
+    if (selectedSeries.length === 0) return;
 
     setLoadingChart(true);
-    
-    const { data, error } = await supabase
-      .from("observations")
-      .select("date, value")
-      .eq("series_id", selectedSeries.id)
-      .gte("date", dateRange.start)
-      .lte("date", dateRange.end)
-      .order("date", { ascending: true });
+    const newSeriesWithData = new Set<string>();
 
-    if (error) {
+    try {
+      // Fetch data for all selected series
+      const allData: { [seriesId: string]: { date: string; value: number | null }[] } = {};
+      
+      for (const series of selectedSeries) {
+        const { data, error } = await supabase
+          .from("observations")
+          .select("date, value")
+          .eq("series_id", series.id)
+          .gte("date", dateRange.start)
+          .lte("date", dateRange.end)
+          .order("date", { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          allData[series.id] = data;
+          newSeriesWithData.add(series.id);
+        }
+      }
+
+      setSeriesWithData(newSeriesWithData);
+
+      // Merge all data by date
+      const dateMap = new Map<string, ChartDataPoint>();
+      
+      for (const seriesId in allData) {
+        for (const obs of allData[seriesId]) {
+          if (!dateMap.has(obs.date)) {
+            dateMap.set(obs.date, { date: obs.date });
+          }
+          dateMap.get(obs.date)![seriesId] = obs.value;
+        }
+      }
+
+      // Sort by date
+      const merged = Array.from(dateMap.values()).sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      setChartData(merged);
+    } catch (error) {
       console.error("Error fetching data:", error);
       setChartData([]);
-    } else {
-      setChartData(data || []);
     }
-    
+
     setLoadingChart(false);
   };
 
@@ -114,23 +163,45 @@ const FredExplorer = () => {
     setSearching(false);
   };
 
-  const handleSelectSeries = async (series: FredSeries) => {
-    setSelectedSeries(series);
+  const handleSelectSeries = (series: FredSeries) => {
+    if (selectedSeries.find(s => s.id === series.id)) {
+      toast({ title: "Series already added" });
+      return;
+    }
+    if (selectedSeries.length >= 6) {
+      toast({ title: "Maximum 6 series allowed", variant: "destructive" });
+      return;
+    }
+
+    const newSeries: SelectedSeriesItem = {
+      ...series,
+      axis: selectedSeries.length === 0 ? "left" : "right",
+      color: COLORS[selectedSeries.length % COLORS.length],
+    };
+    
+    setSelectedSeries([...selectedSeries, newSeries]);
     setSearchResults([]);
     setSearchQuery("");
   };
 
-  const handleIngestSeries = async () => {
-    if (!selectedSeries) return;
+  const handleRemoveSeries = (id: string) => {
+    setSelectedSeries(selectedSeries.filter(s => s.id !== id));
+  };
 
-    setIngesting(true);
+  const toggleAxis = (id: string) => {
+    setSelectedSeries(selectedSeries.map(s => 
+      s.id === id ? { ...s, axis: s.axis === "left" ? "right" : "left" } : s
+    ));
+  };
+
+  const handleIngestSeries = async (series: SelectedSeriesItem) => {
+    setIngestingId(series.id);
     try {
-      await fredApi.ingest(selectedSeries.id);
+      await fredApi.ingest(series.id);
       toast({
         title: "Series ingested",
-        description: `${selectedSeries.title} has been added to the database`,
+        description: `${series.title} has been added to the database`,
       });
-      // Refresh chart data
       await fetchChartData();
     } catch (error) {
       toast({
@@ -139,17 +210,11 @@ const FredExplorer = () => {
         variant: "destructive",
       });
     }
-    setIngesting(false);
+    setIngestingId(null);
   };
 
-  const stats = chartData.length > 0 ? {
-    latest: chartData[chartData.length - 1]?.value,
-    previous: chartData.length > 1 ? chartData[chartData.length - 2]?.value : null,
-  } : null;
-
-  const change = stats?.latest && stats?.previous 
-    ? ((stats.latest - stats.previous) / stats.previous) * 100 
-    : null;
+  const leftAxisSeries = selectedSeries.filter(s => s.axis === "left");
+  const rightAxisSeries = selectedSeries.filter(s => s.axis === "right");
 
   return (
     <div className="min-h-screen bg-background">
@@ -233,44 +298,86 @@ const FredExplorer = () => {
             </Card>
 
             {/* Selected Series */}
-            {selectedSeries && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Selected Series</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="font-medium text-foreground">{selectedSeries.title}</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      ID: {selectedSeries.id}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedSeries.frequency} • {selectedSeries.units}
-                    </p>
-                  </div>
-                  
-                  {chartData.length === 0 && !loadingChart && (
-                    <Button
-                      onClick={handleIngestSeries}
-                      disabled={ingesting}
-                      className="w-full"
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Selected Series ({selectedSeries.length}/6)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedSeries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No series selected</p>
+                ) : (
+                  selectedSeries.map((series) => (
+                    <div
+                      key={series.id}
+                      className="p-3 rounded-lg border border-border space-y-2"
                     >
-                      {ingesting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Importing...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="h-4 w-4 mr-2" />
-                          Import Data from FRED
-                        </>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: series.color }}
+                          />
+                          <p className="font-medium text-sm text-foreground truncate">
+                            {series.title}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 flex-shrink-0"
+                          onClick={() => handleRemoveSeries(series.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {series.id}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-xs gap-1"
+                          onClick={() => toggleAxis(series.id)}
+                        >
+                          {series.axis === "left" ? (
+                            <>
+                              <ChevronLeft className="h-3 w-3" />
+                              Left Y
+                            </>
+                          ) : (
+                            <>
+                              Right Y
+                              <ChevronRight className="h-3 w-3" />
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      {!seriesWithData.has(series.id) && !loadingChart && (
+                        <Button
+                          onClick={() => handleIngestSeries(series)}
+                          disabled={ingestingId === series.id}
+                          size="sm"
+                          className="w-full h-7 text-xs"
+                        >
+                          {ingestingId === series.id ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              Importing...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3 w-3 mr-1" />
+                              Import from FRED
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
 
             {/* Date Range */}
             <Card>
@@ -287,30 +394,17 @@ const FredExplorer = () => {
           <div className="lg:col-span-2">
             <Card className="h-full">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>
-                      {selectedSeries?.title || "Select a series"}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {dateRange.start} to {dateRange.end}
-                    </p>
-                  </div>
-                  {stats?.latest && (
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-foreground font-mono">
-                        {stats.latest.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </p>
-                      {change !== null && (
-                        <p className={`text-sm font-medium ${change >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {change >= 0 ? "+" : ""}{change.toFixed(2)}%
-                        </p>
-                      )}
-                    </div>
-                  )}
+                <div>
+                  <CardTitle>
+                    {selectedSeries.length === 0
+                      ? "Select a series"
+                      : selectedSeries.length === 1
+                      ? selectedSeries[0].title
+                      : `Comparing ${selectedSeries.length} series`}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {dateRange.start} to {dateRange.end}
+                  </p>
                 </div>
               </CardHeader>
               <CardContent>
@@ -324,8 +418,8 @@ const FredExplorer = () => {
                       <TrendingUp className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
                       <p className="text-lg font-medium text-foreground">No data available</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {selectedSeries 
-                          ? "Click 'Import Data from FRED' to load this series" 
+                        {selectedSeries.length > 0
+                          ? "Import data from FRED for selected series"
                           : "Search and select a series to view data"}
                       </p>
                     </div>
@@ -339,18 +433,33 @@ const FredExplorer = () => {
                           dataKey="date"
                           stroke="hsl(var(--muted-foreground))"
                           fontSize={12}
-                          tickFormatter={(value) => 
-                            new Date(value).toLocaleDateString(undefined, { 
-                              month: 'short', 
-                              year: '2-digit' 
+                          tickFormatter={(value) =>
+                            new Date(value).toLocaleDateString(undefined, {
+                              month: "short",
+                              year: "2-digit",
                             })
                           }
                         />
-                        <YAxis
-                          stroke="hsl(var(--muted-foreground))"
-                          fontSize={12}
-                          tickFormatter={(value) => value.toLocaleString()}
-                        />
+                        {/* Left Y-Axis */}
+                        {leftAxisSeries.length > 0 && (
+                          <YAxis
+                            yAxisId="left"
+                            orientation="left"
+                            stroke={leftAxisSeries[0].color}
+                            fontSize={12}
+                            tickFormatter={(value) => value.toLocaleString()}
+                          />
+                        )}
+                        {/* Right Y-Axis */}
+                        {rightAxisSeries.length > 0 && (
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            stroke={rightAxisSeries[0].color}
+                            fontSize={12}
+                            tickFormatter={(value) => value.toLocaleString()}
+                          />
+                        )}
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "hsl(var(--card))",
@@ -358,22 +467,36 @@ const FredExplorer = () => {
                             borderRadius: "var(--radius)",
                           }}
                           labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                          formatter={(value: number) => [
-                            value.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }),
-                            selectedSeries?.units || "Value",
-                          ]}
+                          formatter={(value: number, name: string) => {
+                            const series = selectedSeries.find(s => s.id === name);
+                            return [
+                              value?.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }) || "N/A",
+                              series?.title || name,
+                            ];
+                          }}
                         />
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 4 }}
+                        <Legend
+                          formatter={(value) => {
+                            const series = selectedSeries.find(s => s.id === value);
+                            return series?.title || value;
+                          }}
                         />
+                        {selectedSeries.map((series) => (
+                          <Line
+                            key={series.id}
+                            type="monotone"
+                            dataKey={series.id}
+                            yAxisId={series.axis}
+                            stroke={series.color}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                            connectNulls
+                          />
+                        ))}
                       </LineChart>
                     </ResponsiveContainer>
 
@@ -383,7 +506,15 @@ const FredExplorer = () => {
                         <thead className="sticky top-0 bg-muted">
                           <tr className="border-b border-border">
                             <th className="py-2 px-4 text-left font-medium text-muted-foreground">Date</th>
-                            <th className="py-2 px-4 text-right font-medium text-muted-foreground">Value</th>
+                            {selectedSeries.map((series) => (
+                              <th
+                                key={series.id}
+                                className="py-2 px-4 text-right font-medium text-muted-foreground"
+                                style={{ color: series.color }}
+                              >
+                                {series.id}
+                              </th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody>
@@ -392,12 +523,17 @@ const FredExplorer = () => {
                               <td className="py-2 px-4 text-foreground font-mono">
                                 {new Date(obs.date).toLocaleDateString()}
                               </td>
-                              <td className="py-2 px-4 text-right font-mono text-foreground">
-                                {obs.value?.toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </td>
+                              {selectedSeries.map((series) => (
+                                <td
+                                  key={series.id}
+                                  className="py-2 px-4 text-right font-mono text-foreground"
+                                >
+                                  {(obs[series.id] as number)?.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  }) || "—"}
+                                </td>
+                              ))}
                             </tr>
                           ))}
                         </tbody>
