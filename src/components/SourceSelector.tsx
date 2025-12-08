@@ -9,8 +9,12 @@ interface SourceSelectorProps {
 
 export const SourceSelector = ({ value, onChange }: SourceSelectorProps) => {
   const sources: { value: DataSource; label: string; icon: typeof Globe }[] = [
-    { value: "ALL", label: "All Sources", icon: Globe },
+    { value: "ALL", label: "All", icon: Globe },
     { value: "FRED", label: "FRED", icon: Database },
+    { value: "ECB", label: "ECB", icon: Database },
+    { value: "EUROSTAT", label: "Eurostat", icon: Database },
+    { value: "OECD", label: "OECD", icon: Database },
+    { value: "WORLDBANK", label: "World Bank", icon: Database },
     { value: "STATFIN", label: "StatFin", icon: Database },
   ];
 
