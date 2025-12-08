@@ -111,3 +111,168 @@ export const statfinApi = {
     return await response.json();
   },
 };
+
+export const ecbApi = {
+  async search(query: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-ecb?action=search&query=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to search ECB");
+    }
+    
+    return await response.json();
+  },
+
+  async ingest(dataflowId: string, seriesKey: string, title: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-ecb?action=ingest&dataflowId=${encodeURIComponent(dataflowId)}&seriesKey=${encodeURIComponent(seriesKey)}&title=${encodeURIComponent(title)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to ingest ECB series");
+    }
+    
+    return await response.json();
+  },
+};
+
+export const eurostatApi = {
+  async search(query: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-eurostat?action=search&query=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to search Eurostat");
+    }
+    
+    return await response.json();
+  },
+
+  async ingest(datasetId: string, filters: string, title: string, geo?: string) {
+    let url = `${SUPABASE_URL}/functions/v1/fetch-eurostat?action=ingest&datasetId=${encodeURIComponent(datasetId)}&filters=${encodeURIComponent(filters)}&title=${encodeURIComponent(title)}`;
+    if (geo) url += `&geo=${encodeURIComponent(geo)}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to ingest Eurostat series");
+    }
+    
+    return await response.json();
+  },
+};
+
+export const oecdApi = {
+  async search(query: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-oecd?action=search&query=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to search OECD");
+    }
+    
+    return await response.json();
+  },
+
+  async ingest(dataflowId: string, key: string, title: string, geo?: string) {
+    let url = `${SUPABASE_URL}/functions/v1/fetch-oecd?action=ingest&dataflowId=${encodeURIComponent(dataflowId)}&key=${encodeURIComponent(key)}&title=${encodeURIComponent(title)}`;
+    if (geo) url += `&geo=${encodeURIComponent(geo)}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to ingest OECD series");
+    }
+    
+    return await response.json();
+  },
+};
+
+export const worldbankApi = {
+  async search(query: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-worldbank?action=search&query=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to search World Bank");
+    }
+    
+    return await response.json();
+  },
+
+  async getCountries() {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-worldbank?action=countries`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to get countries");
+    }
+    
+    return await response.json();
+  },
+
+  async ingest(indicatorId: string, country: string, title: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-worldbank?action=ingest&indicatorId=${encodeURIComponent(indicatorId)}&country=${encodeURIComponent(country)}&title=${encodeURIComponent(title)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to ingest World Bank series");
+    }
+    
+    return await response.json();
+  },
+};

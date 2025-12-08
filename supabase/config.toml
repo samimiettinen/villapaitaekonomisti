@@ -1,1 +1,19 @@
 project_id = "nfofmjbsjzscmdonmnac"
+
+[functions.fetch-fred]
+verify_jwt = false
+
+[functions.fetch-statfin]
+verify_jwt = false
+
+[functions.fetch-ecb]
+verify_jwt = false
+
+[functions.fetch-eurostat]
+verify_jwt = false
+
+[functions.fetch-oecd]
+verify_jwt = false
+
+[functions.fetch-worldbank]
+verify_jwt = false

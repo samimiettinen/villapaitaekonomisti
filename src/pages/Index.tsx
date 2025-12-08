@@ -5,7 +5,7 @@ import { SeriesDetail } from "@/components/SeriesDetail";
 import { SearchBar } from "@/components/SearchBar";
 import { SourceSelector } from "@/components/SourceSelector";
 
-export type DataSource = "ALL" | "FRED" | "STATFIN";
+export type DataSource = "ALL" | "FRED" | "STATFIN" | "ECB" | "EUROSTAT" | "OECD" | "WORLDBANK";
 
 const Index = () => {
   const [selectedSource, setSelectedSource] = useState<DataSource>("ALL");
