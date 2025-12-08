@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, Search, Loader2, Download, X, ChevronLeft, ChevronRight, Database, Globe, Building2, Landmark, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { GeoSelector, EUROSTAT_COUNTRIES, WORLDBANK_REGIONS } from "@/components/GeoSelector";
 import { fredApi, statfinApi, ecbApi, eurostatApi, oecdApi, worldbankApi } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -21,6 +22,7 @@ interface DataSeries {
   units?: string;
   path?: string;
   providerId?: string;
+  geo?: string;
 }
 
 interface SelectedSeriesItem extends DataSeries {
@@ -37,6 +39,12 @@ interface StatFinItem {
   id: string;
   text: string;
   type: string;
+}
+
+interface WBCountry {
+  id: string;
+  name: string;
+  region?: string;
 }
 
 const COLORS = [
@@ -70,6 +78,12 @@ const DataExplorer = () => {
   const [statfinPath, setStatfinPath] = useState<string[]>([]);
   const [statfinLoading, setStatfinLoading] = useState(false);
 
+  // Geo filters for Eurostat and World Bank
+  const [eurostatGeo, setEurostatGeo] = useState<string>("EU27_2020");
+  const [worldbankCountry, setWorldbankCountry] = useState<string>("WLD");
+  const [wbCountries, setWbCountries] = useState<WBCountry[]>([]);
+  const [wbCountriesLoading, setWbCountriesLoading] = useState(false);
+
   // Shared state
   const [selectedSeries, setSelectedSeries] = useState<SelectedSeriesItem[]>([]);
   const [dateRange, setDateRange] = useState({
@@ -80,6 +94,21 @@ const DataExplorer = () => {
   const [loadingChart, setLoadingChart] = useState(false);
   const [ingestingId, setIngestingId] = useState<string | null>(null);
   const [seriesWithData, setSeriesWithData] = useState<Set<string>>(new Set());
+
+  // Load World Bank countries on mount
+  useEffect(() => {
+    const loadWbCountries = async () => {
+      setWbCountriesLoading(true);
+      try {
+        const data = await worldbankApi.getCountries();
+        setWbCountries(data.countries || []);
+      } catch (error) {
+        console.error("Error loading WB countries:", error);
+      }
+      setWbCountriesLoading(false);
+    };
+    loadWbCountries();
+  }, []);
 
   // Generic search handler
   const handleSearch = async () => {
@@ -114,12 +143,13 @@ const DataExplorer = () => {
           break;
         }
         case "eurostat": {
-          const data = await eurostatApi.search(searchQuery);
+          const data = await eurostatApi.search(searchQuery, eurostatGeo);
           results = (data.results || []).map((s: any) => ({
             id: s.id,
             title: s.title,
             source: "EUROSTAT" as SourceType,
             providerId: s.id,
+            geo: eurostatGeo,
           }));
           break;
         }
@@ -134,12 +164,13 @@ const DataExplorer = () => {
           break;
         }
         case "worldbank": {
-          const data = await worldbankApi.search(searchQuery);
+          const data = await worldbankApi.search(searchQuery, worldbankCountry);
           results = (data.results || []).map((s: any) => ({
             id: s.id,
             title: s.name,
             source: "WORLDBANK" as SourceType,
             providerId: s.id,
+            geo: worldbankCountry,
           }));
           break;
         }
@@ -336,7 +367,8 @@ const DataExplorer = () => {
         }
         case "EUROSTAT": {
           const datasetId = series.providerId || series.id.replace("EUROSTAT_", "").split("_")[0];
-          await eurostatApi.ingest(datasetId, "", series.title);
+          const geo = series.geo || eurostatGeo;
+          await eurostatApi.ingest(datasetId, geo, series.title, geo);
           break;
         }
         case "OECD": {
@@ -346,7 +378,8 @@ const DataExplorer = () => {
         }
         case "WORLDBANK": {
           const indicatorId = series.providerId || series.id.replace("WB_", "").split("_")[0];
-          await worldbankApi.ingest(indicatorId, "WLD", series.title);
+          const country = series.geo || worldbankCountry;
+          await worldbankApi.ingest(indicatorId, country, series.title);
           break;
         }
       }
@@ -451,8 +484,8 @@ const DataExplorer = () => {
                 </TabsTrigger>
               </TabsList>
 
-              {/* Search-based sources */}
-              {["fred", "ecb", "eurostat", "oecd", "worldbank"].map((source) => (
+              {/* FRED, ECB, OECD - Standard search */}
+              {["fred", "ecb", "oecd"].map((source) => (
                 <TabsContent key={source} value={source} className="space-y-4 mt-4">
                   <Card>
                     <CardHeader className="pb-3">
@@ -501,6 +534,109 @@ const DataExplorer = () => {
                   </Card>
                 </TabsContent>
               ))}
+
+              {/* Eurostat with geo filter */}
+              <TabsContent value="eurostat" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Search Eurostat</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <GeoSelector
+                      options={EUROSTAT_COUNTRIES}
+                      value={eurostatGeo}
+                      onChange={setEurostatGeo}
+                      placeholder="Select country/region"
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="GDP, inflation, employment..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                      />
+                      <Button onClick={handleSearch} disabled={searching} size="icon">
+                        {searching ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {searchResults.length > 0 && (
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {searchResults.map((series) => (
+                          <button
+                            key={series.id}
+                            onClick={() => handleSelectSeries(series)}
+                            className="w-full text-left p-3 rounded-lg border border-border hover:bg-accent transition-colors"
+                          >
+                            <p className="font-medium text-sm text-foreground truncate">
+                              {series.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {series.id} • {EUROSTAT_COUNTRIES.find(c => c.id === eurostatGeo)?.name || eurostatGeo}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* World Bank with country filter */}
+              <TabsContent value="worldbank" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Search World Bank</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <GeoSelector
+                      options={wbCountries.length > 0 ? wbCountries : WORLDBANK_REGIONS}
+                      value={worldbankCountry}
+                      onChange={setWorldbankCountry}
+                      placeholder="Select country/region"
+                      loading={wbCountriesLoading}
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="GDP, inflation, population..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                      />
+                      <Button onClick={handleSearch} disabled={searching} size="icon">
+                        {searching ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {searchResults.length > 0 && (
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {searchResults.map((series) => (
+                          <button
+                            key={series.id}
+                            onClick={() => handleSelectSeries(series)}
+                            className="w-full text-left p-3 rounded-lg border border-border hover:bg-accent transition-colors"
+                          >
+                            <p className="font-medium text-sm text-foreground truncate">
+                              {series.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {series.id} • {wbCountries.find(c => c.id === worldbankCountry)?.name || worldbankCountry}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               {/* StatFin browse */}
               <TabsContent value="statfin" className="space-y-4 mt-4">

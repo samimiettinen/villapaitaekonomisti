@@ -149,8 +149,10 @@ export const ecbApi = {
 };
 
 export const eurostatApi = {
-  async search(query: string) {
-    const url = `${SUPABASE_URL}/functions/v1/fetch-eurostat?action=search&query=${encodeURIComponent(query)}`;
+  async search(query: string, geo?: string) {
+    let url = `${SUPABASE_URL}/functions/v1/fetch-eurostat?action=search&query=${encodeURIComponent(query)}`;
+    if (geo) url += `&geo=${encodeURIComponent(geo)}`;
+    
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -225,8 +227,10 @@ export const oecdApi = {
 };
 
 export const worldbankApi = {
-  async search(query: string) {
-    const url = `${SUPABASE_URL}/functions/v1/fetch-worldbank?action=search&query=${encodeURIComponent(query)}`;
+  async search(query: string, country?: string) {
+    let url = `${SUPABASE_URL}/functions/v1/fetch-worldbank?action=search&query=${encodeURIComponent(query)}`;
+    if (country) url += `&country=${encodeURIComponent(country)}`;
+    
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
