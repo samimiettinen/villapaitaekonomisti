@@ -28,16 +28,18 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <a href="/explore" className="text-sm font-medium text-primary hover:text-primary/80">
+                Data Explorer
+              </a>
+              <a href="/fred" className="text-sm text-muted-foreground hover:text-primary">
+                FRED
+              </a>
               <a href="/analysis" className="text-sm text-muted-foreground hover:text-primary">
-                Analysis Builder
+                Analysis
               </a>
               <a href="/admin" className="text-sm text-muted-foreground hover:text-primary">
                 Admin
               </a>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Database className="h-4 w-4" />
-                <span>FRED + StatFin</span>
-              </div>
             </div>
           </div>
         </div>

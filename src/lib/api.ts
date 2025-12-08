@@ -57,10 +57,42 @@ export const statfinApi = {
     return await response.json();
   },
 
+  async listTables(path: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=tables&databasePath=${encodeURIComponent(path)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to list tables");
+    }
+    
+    return await response.json();
+  },
+
+  async getMetadata(tablePath: string) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=metadata&tablePath=${encodeURIComponent(tablePath)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to get metadata");
+    }
+    
+    return await response.json();
+  },
+
   async ingest(tablePath: string, query: any) {
-    const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=ingest&tablePath=${encodeURIComponent(
-      tablePath
-    )}`;
+    const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=ingest&tablePath=${encodeURIComponent(tablePath)}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
