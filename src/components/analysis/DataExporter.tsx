@@ -1,7 +1,7 @@
 import { Download, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
-import type { SelectedSeries, Transformation } from "@/pages/Analysis";
+import type { SelectedSeries, Transformation } from "@/lib/types";
 
 interface DataExporterProps {
   data: Array<{ date: string; [key: string]: number | string | null }>;

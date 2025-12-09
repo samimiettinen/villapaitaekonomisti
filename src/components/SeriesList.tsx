@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
-import type { DataSource } from "@/pages/Index";
+import type { DataSource } from "@/lib/types";
 
 interface Series {
   id: string;

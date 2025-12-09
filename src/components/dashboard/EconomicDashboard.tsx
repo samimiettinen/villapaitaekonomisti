@@ -1,0 +1,154 @@
+import { useState } from "react";
+import { RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { FeaturedIndicatorCard, FeaturedIndicator } from "./FeaturedIndicatorCard";
+import { fredApi, statfinApi } from "@/lib/api";
+
+// Featured indicators configuration
+// To add new indicators:
+// 1. Add an entry here with the series_id from your database
+// 2. The series must already be ingested via the edge functions
+const FEATURED_INDICATORS: FeaturedIndicator[] = [
+  {
+    seriesId: "FRED_GDPC1",
+    label: "US Real GDP",
+    source: "FRED",
+    currency: "USD",
+  },
+  {
+    seriesId: "FRED_CPIAUCSL",
+    label: "US Consumer Price Index",
+    source: "FRED",
+    currency: "USD",
+  },
+  {
+    seriesId: "FRED_UNRATE",
+    label: "US Unemployment Rate",
+    source: "FRED",
+    currency: "original",
+  },
+  {
+    seriesId: "FRED_FEDFUNDS",
+    label: "Federal Funds Rate",
+    source: "FRED",
+    currency: "original",
+  },
+  {
+    seriesId: "FRED_DGS10",
+    label: "10-Year Treasury Yield",
+    source: "FRED",
+    currency: "original",
+  },
+  {
+    seriesId: "FRED_DEXUSEU",
+    label: "EUR/USD Exchange Rate",
+    source: "FRED",
+    currency: "original",
+  },
+];
+
+// FRED series IDs for refresh functionality
+const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DEXUSEU"];
+
+export const EconomicDashboard = () => {
+  const [refreshing, setRefreshing] = useState(false);
+  const { toast } = useToast();
+
+  const handleRefreshData = async () => {
+    setRefreshing(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Refresh FRED indicators
+      for (const seriesId of FRED_SERIES_IDS) {
+        try {
+          await fredApi.ingest(seriesId);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to refresh ${seriesId}:`, err);
+          errorCount++;
+        }
+      }
+
+      if (errorCount === 0) {
+        toast({
+          title: "Data refreshed successfully",
+          description: `Updated ${successCount} indicators from FRED.`,
+        });
+      } else {
+        toast({
+          title: "Partial refresh",
+          description: `Updated ${successCount} indicators, ${errorCount} failed.`,
+          variant: "destructive",
+        });
+      }
+
+      // Trigger a page reload to show new data
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      toast({
+        title: "Refresh failed",
+        description: err.message || "Could not refresh data",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Dashboard Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Economic Dashboard</h2>
+          <p className="text-sm text-muted-foreground">
+            Key macroeconomic indicators updated from FRED and StatFin
+          </p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={handleRefreshData} 
+          disabled={refreshing}
+          className="self-start"
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? "Refreshing..." : "Refresh Data"}
+        </Button>
+      </div>
+
+      {/* Featured Indicators Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {FEATURED_INDICATORS.map((indicator) => (
+          <FeaturedIndicatorCard key={indicator.seriesId} indicator={indicator} />
+        ))}
+      </div>
+
+      {/* Help Card */}
+      <Card className="bg-muted/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">About This Dashboard</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <p>
+            This dashboard displays key economic indicators from the Federal Reserve Economic Data (FRED) 
+            and Statistics Finland (StatFin) databases.
+          </p>
+          <p>
+            Each card shows the latest value, percentage change from the previous period, and a sparkline 
+            visualization of recent trends. Click "Refresh Data" to fetch the latest values.
+          </p>
+          <p>
+            For detailed analysis and custom queries, use the <strong>Data Explorer</strong> tab.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Export for customization
+export { FEATURED_INDICATORS, FRED_SERIES_IDS };

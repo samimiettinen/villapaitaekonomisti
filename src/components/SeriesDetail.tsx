@@ -23,7 +23,8 @@ interface SeriesMetadata {
   geo: string | null;
 }
 
-export type Currency = "original" | "EUR" | "USD";
+import type { Currency } from "@/lib/types";
+export type { Currency };
 
 export const SeriesDetail = ({ seriesId }: SeriesDetailProps) => {
   const [metadata, setMetadata] = useState<SeriesMetadata | null>(null);

@@ -1,6 +1,6 @@
 import { Database, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { DataSource } from "@/pages/Index";
+import type { DataSource } from "@/lib/types";
 
 interface SourceSelectorProps {
   value: DataSource;
