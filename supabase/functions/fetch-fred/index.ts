@@ -97,6 +97,7 @@ Deno.serve(async (req) => {
 
       // Fetch metadata
       const metadataUrl = `${fredBaseUrl}/series?series_id=${seriesId}&api_key=${fredApiKey}&file_type=json`;
+      console.log("Fetching metadata for:", seriesId);
       const metaResponse = await fetch(metadataUrl);
       const metaData = await metaResponse.json();
       const series = metaData.seriess?.[0];
@@ -120,48 +121,49 @@ Deno.serve(async (req) => {
 
       if (seriesError) throw seriesError;
 
-      // Fetch observations
-      const obsUrl = `${fredBaseUrl}/series/observations?series_id=${seriesId}&api_key=${fredApiKey}&file_type=json`;
+      // Fetch observations - limit to last 10 years for efficiency
+      const tenYearsAgo = new Date();
+      tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+      const startDate = tenYearsAgo.toISOString().split('T')[0];
+      
+      const obsUrl = `${fredBaseUrl}/series/observations?series_id=${seriesId}&api_key=${fredApiKey}&file_type=json&observation_start=${startDate}`;
+      console.log("Fetching observations for:", seriesId, "from:", startDate);
       const obsResponse = await fetch(obsUrl);
       const obsData = await obsResponse.json();
       const observations = obsData.observations || [];
+      console.log("Received", observations.length, "observations");
 
-      // Fetch EUR/USD exchange rate for normalization
-      const fxUrl = `${fredBaseUrl}/series/observations?series_id=DEXUSEU&api_key=${fredApiKey}&file_type=json`;
-      const fxResponse = await fetch(fxUrl);
-      const fxData = await fxResponse.json();
-      const fxRates: { [key: string]: number } = {};
-      
-      (fxData.observations || []).forEach((obs: FredObservation) => {
-        if (obs.value !== ".") {
-          fxRates[obs.date] = parseFloat(obs.value);
-        }
-      });
-
-      // Insert observations
+      // Insert observations without FX conversion to save resources
+      // FX conversion can be done client-side or via a separate process
       const obsToInsert = observations
         .filter((obs: FredObservation) => obs.value !== ".")
         .map((obs: FredObservation) => {
           const value = parseFloat(obs.value);
-          const fxRate = fxRates[obs.date] || 1.0;
+          const isUSD = series.units?.includes("USD") || series.units?.includes("Dollars");
           
           return {
             series_id: `FRED_${seriesId}`,
             date: obs.date,
             value,
-            value_usd: series.units?.includes("USD") ? value : null,
-            value_eur: series.units?.includes("USD") && fxRate ? value / fxRate : null,
+            value_usd: isUSD ? value : null,
+            value_eur: null, // Skip FX conversion to save resources
           };
         });
 
       if (obsToInsert.length > 0) {
-        const { error: obsError } = await supabase
-          .from("observations")
-          .upsert(obsToInsert, { onConflict: "series_id,date" });
+        // Insert in batches to avoid memory issues
+        const batchSize = 500;
+        for (let i = 0; i < obsToInsert.length; i += batchSize) {
+          const batch = obsToInsert.slice(i, i + batchSize);
+          const { error: obsError } = await supabase
+            .from("observations")
+            .upsert(batch, { onConflict: "series_id,date" });
 
-        if (obsError) throw obsError;
+          if (obsError) throw obsError;
+        }
       }
 
+      console.log("Successfully ingested", obsToInsert.length, "observations for", seriesId);
       return new Response(
         JSON.stringify({
           success: true,

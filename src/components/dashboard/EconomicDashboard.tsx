@@ -61,15 +61,23 @@ export const EconomicDashboard = () => {
     let successCount = 0;
     let errorCount = 0;
 
+    // Helper to add delay between calls to avoid overwhelming edge functions
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     try {
-      // Refresh FRED indicators
+      // Refresh FRED indicators sequentially with delays to avoid resource limits
       for (const seriesId of FRED_SERIES_IDS) {
         try {
+          console.log(`Refreshing ${seriesId}...`);
           await fredApi.ingest(seriesId);
           successCount++;
+          // Wait 2 seconds between calls to let edge function resources reset
+          await delay(2000);
         } catch (err) {
           console.error(`Failed to refresh ${seriesId}:`, err);
           errorCount++;
+          // Wait a bit longer after an error
+          await delay(3000);
         }
       }
 
