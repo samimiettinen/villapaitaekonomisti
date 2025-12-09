@@ -43,8 +43,11 @@ Deno.serve(async (req) => {
         query
       )}&api_key=${fredApiKey}&file_type=json&limit=50`;
 
+      console.log("FRED Search URL (without key):", searchUrl.replace(fredApiKey, "***"));
       const response = await fetch(searchUrl);
       const data = await response.json();
+      console.log("FRED Search Response status:", response.status);
+      console.log("FRED Search Response data:", JSON.stringify(data).substring(0, 500));
 
       return new Response(
         JSON.stringify({
