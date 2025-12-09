@@ -1,27 +1,13 @@
 import { useState } from "react";
 import { TrendingUp } from "lucide-react";
+import { DashboardLayout } from "@/components/dashboard";
 import { MultiSeriesSelector } from "@/components/analysis/MultiSeriesSelector";
 import { TransformationBuilder } from "@/components/analysis/TransformationBuilder";
 import { MultiSeriesChart } from "@/components/analysis/MultiSeriesChart";
 import { AnalysisDataTable } from "@/components/analysis/AnalysisDataTable";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { CurrencySelector } from "@/components/CurrencySelector";
-import type { Currency } from "@/components/SeriesDetail";
-
-export type SelectedSeries = {
-  id: string;
-  title: string;
-  source: string;
-  currency_orig: string | null;
-};
-
-export type Transformation = {
-  id: string;
-  name: string;
-  type: "divide" | "multiply" | "add" | "subtract";
-  seriesA: string;
-  seriesB: string;
-};
+import type { Currency, SelectedSeries, Transformation } from "@/lib/types";
 
 const Analysis = () => {
   const [selectedSeries, setSelectedSeries] = useState<SelectedSeries[]>([]);
@@ -33,34 +19,13 @@ const Analysis = () => {
   const [currency, setCurrency] = useState<Currency>("original");
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <TrendingUp className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">Analysis Builder</h1>
-                <p className="text-sm text-muted-foreground">Multi-series time-series analysis</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <a href="/" className="text-sm text-muted-foreground hover:text-primary">
-                Dashboard
-              </a>
-              <a href="/admin" className="text-sm text-muted-foreground hover:text-primary">
-                Admin
-              </a>
-            </div>
-          </div>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Analysis Builder</h2>
+          <p className="text-sm text-muted-foreground">Multi-series time-series analysis</p>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-6 py-6">
         <div className="grid gap-6 lg:grid-cols-4">
           {/* Left Panel: Series Selection & Transformations */}
           <div className="lg:col-span-1 space-y-6">
@@ -115,7 +80,7 @@ const Analysis = () => {
           </div>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
 

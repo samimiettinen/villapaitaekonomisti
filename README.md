@@ -2,34 +2,34 @@
 
 A private macroeconomic data warehouse with web dashboard for fetching, storing, and visualizing time series data from multiple sources.
 
+## Run on Lovable / Publish
+
+1. **Set up secrets in Lovable Cloud**:
+   - Go to the Cloud tab → Secrets
+   - Add `FRED_API_KEY` with your FRED API key (get one at https://fred.stlouisfed.org/docs/api/api_key.html)
+
+2. **Routes**:
+   - `/` — Dashboard with featured economic indicators
+   - `/explore` — Data Explorer for searching and comparing series
+   - `/analysis` — Multi-series analysis builder
+   - `/fred` — FRED-specific explorer
+
+3. **Publish**: Click "Publish" in Lovable to deploy both frontend and edge functions.
+
+## Customizing Featured Indicators
+
+Edit `src/components/dashboard/EconomicDashboard.tsx`:
+
+```typescript
+const FEATURED_INDICATORS: FeaturedIndicator[] = [
+  { seriesId: "FRED_GDPC1", label: "US Real GDP", source: "FRED", currency: "USD" },
+  // Add more indicators here...
+];
+```
+
+The series must be ingested first via the API (use `/explore` or call `fredApi.ingest("SERIES_ID")`).
+
 ## Features
-
-- **Multi-Source Data Integration**
-  - FRED (Federal Reserve Economic Data)
-  - Statistics Finland (StatFin) via PxWeb API
-  
-- **Database Storage**
-  - PostgreSQL database with normalized schema
-  - Currency conversion support (EUR/USD)
-  - Time series observations with metadata
-  
-- **REST API**
-  - Query series by source and search terms
-  - Fetch observations with date range filters
-  - Currency selection (original, EUR, USD)
-  
-- **Web Dashboard**
-  - Search and filter time series
-  - Interactive charts with Recharts
-  - Data tables with observations
-  - Currency and date range controls
-
-## Tech Stack
-
-- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: Lovable Cloud (Supabase), Edge Functions
-- **Database**: PostgreSQL with Row Level Security
-- **APIs**: FRED API, StatFin PxWeb API
 
 ## Database Schema
 

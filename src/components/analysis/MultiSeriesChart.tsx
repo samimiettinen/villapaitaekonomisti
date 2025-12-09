@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import type { SelectedSeries, Transformation } from "@/pages/Analysis";
-import type { Currency } from "@/components/SeriesDetail";
+import type { SelectedSeries, Transformation, Currency } from "@/lib/types";
 
 interface MultiSeriesChartProps {
   selectedSeries: SelectedSeries[];

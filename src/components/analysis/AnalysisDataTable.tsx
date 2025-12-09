@@ -11,8 +11,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { DataExporter } from "./DataExporter";
-import type { SelectedSeries, Transformation } from "@/pages/Analysis";
-import type { Currency } from "@/components/SeriesDetail";
+import type { SelectedSeries, Transformation, Currency } from "@/lib/types";
 
 interface AnalysisDataTableProps {
   selectedSeries: SelectedSeries[];

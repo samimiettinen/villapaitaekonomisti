@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { SelectedSeries, Transformation } from "@/pages/Analysis";
+import type { SelectedSeries, Transformation } from "@/lib/types";
 
 interface TransformationBuilderProps {
   selectedSeries: SelectedSeries[];

@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { SourceSelector } from "@/components/SourceSelector";
-import type { DataSource } from "@/pages/Index";
-import type { SelectedSeries } from "@/pages/Analysis";
+import type { DataSource, SelectedSeries } from "@/lib/types";
 
 interface Series {
   id: string;
