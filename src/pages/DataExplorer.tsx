@@ -1,15 +1,24 @@
-import { useState, useEffect } from "react";
-import { TrendingUp, Search, Loader2, Download, X, ChevronLeft, ChevronRight, Database, Globe, Building2, Landmark, BarChart3 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { TrendingUp, Search, Loader2, Download, X, ChevronLeft, ChevronRight, Database, Globe, Building2, Landmark, BarChart3, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { GeoSelector, EUROSTAT_COUNTRIES, WORLDBANK_REGIONS } from "@/components/GeoSelector";
+import { ChartTypeSelector, type ChartType } from "@/components/explorer/ChartTypeSelector";
+import { StatsSummary } from "@/components/explorer/StatsSummary";
+import { ExplorerDataTable } from "@/components/explorer/ExplorerDataTable";
+import { ExplorerExporter } from "@/components/explorer/ExplorerExporter";
+import { calculateStats } from "@/lib/stats";
 import { fredApi, statfinApi, ecbApi, eurostatApi, oecdApi, worldbankApi } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { 
+  LineChart, Line, BarChart, Bar, ScatterChart, Scatter,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
+} from "recharts";
 import { toast } from "@/hooks/use-toast";
 
 type SourceType = "FRED" | "STATFIN" | "ECB" | "EUROSTAT" | "OECD" | "WORLDBANK";
@@ -67,6 +76,7 @@ const SOURCE_LABELS: Record<SourceType, string> = {
 
 const DataExplorer = () => {
   const [activeTab, setActiveTab] = useState<string>("fred");
+  const [chartType, setChartType] = useState<ChartType>("line");
   
   // Search state for each source
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,6 +104,24 @@ const DataExplorer = () => {
   const [loadingChart, setLoadingChart] = useState(false);
   const [ingestingId, setIngestingId] = useState<string | null>(null);
   const [seriesWithData, setSeriesWithData] = useState<Set<string>>(new Set());
+
+  // Calculate statistics for selected series
+  const seriesStats = useMemo(() => {
+    if (chartData.length === 0 || selectedSeries.length === 0) return [];
+
+    return selectedSeries
+      .filter((series) => seriesWithData.has(series.id))
+      .map((series) => {
+        const values = chartData.map((row) => row[series.id] as number | null);
+        const stats = calculateStats(values);
+        return {
+          seriesId: series.id,
+          seriesTitle: series.title,
+          color: series.color,
+          ...stats,
+        };
+      });
+  }, [chartData, selectedSeries, seriesWithData]);
 
   // Load World Bank countries on mount
   useEffect(() => {
@@ -419,6 +447,159 @@ const DataExplorer = () => {
       )
     : statfinItems;
 
+  // Render chart based on type
+  const renderChart = () => {
+    if (chartData.length === 0) return null;
+
+    const commonXAxisProps = {
+      dataKey: "date",
+      stroke: "hsl(var(--muted-foreground))",
+      fontSize: 12,
+      tickFormatter: (value: string) =>
+        new Date(value).toLocaleDateString(undefined, {
+          month: "short",
+          year: "2-digit",
+        }),
+    };
+
+    const commonTooltipProps = {
+      contentStyle: {
+        backgroundColor: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: "var(--radius)",
+      },
+      labelFormatter: (label: string) => new Date(label).toLocaleDateString(),
+      formatter: (value: number, name: string) => {
+        const series = selectedSeries.find(s => s.id === name);
+        return [
+          value?.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }) ?? "N/A",
+          series?.title ?? name,
+        ];
+      },
+    };
+
+    if (chartType === "bar") {
+      return (
+        <BarChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis {...commonXAxisProps} />
+          {leftAxisSeries.length > 0 && (
+            <YAxis
+              yAxisId="left"
+              orientation="left"
+              stroke={leftAxisSeries[0].color}
+              fontSize={12}
+              tickFormatter={(value) => value.toLocaleString()}
+            />
+          )}
+          {rightAxisSeries.length > 0 && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              stroke={rightAxisSeries[0].color}
+              fontSize={12}
+              tickFormatter={(value) => value.toLocaleString()}
+            />
+          )}
+          <Tooltip {...commonTooltipProps} />
+          <Legend />
+          {selectedSeries.map((series) => (
+            <Bar
+              key={series.id}
+              dataKey={series.id}
+              name={series.title}
+              fill={series.color}
+              yAxisId={series.axis}
+            />
+          ))}
+        </BarChart>
+      );
+    }
+
+    if (chartType === "scatter") {
+      return (
+        <ScatterChart>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis {...commonXAxisProps} />
+          {leftAxisSeries.length > 0 && (
+            <YAxis
+              yAxisId="left"
+              orientation="left"
+              stroke={leftAxisSeries[0].color}
+              fontSize={12}
+              tickFormatter={(value) => value.toLocaleString()}
+            />
+          )}
+          {rightAxisSeries.length > 0 && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              stroke={rightAxisSeries[0].color}
+              fontSize={12}
+              tickFormatter={(value) => value.toLocaleString()}
+            />
+          )}
+          <Tooltip {...commonTooltipProps} />
+          <Legend />
+          {selectedSeries.map((series) => (
+            <Scatter
+              key={series.id}
+              dataKey={series.id}
+              name={series.title}
+              fill={series.color}
+              yAxisId={series.axis}
+              data={chartData}
+            />
+          ))}
+        </ScatterChart>
+      );
+    }
+
+    // Default: Line chart
+    return (
+      <LineChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis {...commonXAxisProps} />
+        {leftAxisSeries.length > 0 && (
+          <YAxis
+            yAxisId="left"
+            orientation="left"
+            stroke={leftAxisSeries[0].color}
+            fontSize={12}
+            tickFormatter={(value) => value.toLocaleString()}
+          />
+        )}
+        {rightAxisSeries.length > 0 && (
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            stroke={rightAxisSeries[0].color}
+            fontSize={12}
+            tickFormatter={(value) => value.toLocaleString()}
+          />
+        )}
+        <Tooltip {...commonTooltipProps} />
+        <Legend />
+        {selectedSeries.map((series) => (
+          <Line
+            key={series.id}
+            type="monotone"
+            dataKey={series.id}
+            name={series.title}
+            stroke={series.color}
+            strokeWidth={2}
+            dot={false}
+            yAxisId={series.axis}
+            connectNulls
+          />
+        ))}
+      </LineChart>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -453,6 +634,14 @@ const DataExplorer = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-6">
+        {/* Helper text */}
+        <Alert className="mb-6">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Choose variables and filters on the left to generate custom graphs and statistical tables from the economic data warehouse.
+          </AlertDescription>
+        </Alert>
+
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Panel: Data Sources */}
           <div className="space-y-6">
@@ -806,30 +995,39 @@ const DataExplorer = () => {
             </Card>
           </div>
 
-          {/* Right Panel: Chart */}
-          <div className="lg:col-span-2">
-            <Card className="h-full">
+          {/* Right Panel: Chart, Stats, Table */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Chart Card */}
+            <Card>
               <CardHeader>
-                <div>
-                  <CardTitle>
-                    {selectedSeries.length === 0
-                      ? "Select data to visualize"
-                      : selectedSeries.length === 1
-                      ? selectedSeries[0].title
-                      : `Comparing ${selectedSeries.length} series`}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {dateRange.start} to {dateRange.end}
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <CardTitle>
+                      {selectedSeries.length === 0
+                        ? "Select data to visualize"
+                        : selectedSeries.length === 1
+                        ? selectedSeries[0].title
+                        : `Comparing ${selectedSeries.length} series`}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {dateRange.start} to {dateRange.end}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ChartTypeSelector value={chartType} onChange={setChartType} />
+                    {chartData.length > 0 && (
+                      <ExplorerExporter data={chartData} selectedSeries={selectedSeries} />
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
                 {loadingChart ? (
-                  <div className="h-[500px] flex items-center justify-center">
+                  <div className="h-[400px] flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : chartData.length === 0 ? (
-                  <div className="h-[500px] flex items-center justify-center">
+                  <div className="h-[400px] flex items-center justify-center">
                     <div className="text-center">
                       <Globe className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
                       <p className="text-lg font-medium text-foreground">No data to display</p>
@@ -841,73 +1039,18 @@ const DataExplorer = () => {
                     </div>
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={500}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis
-                        dataKey="date"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                        tickFormatter={(value) =>
-                          new Date(value).toLocaleDateString(undefined, {
-                            month: "short",
-                            year: "2-digit",
-                          })
-                        }
-                      />
-                      {leftAxisSeries.length > 0 && (
-                        <YAxis
-                          yAxisId="left"
-                          orientation="left"
-                          stroke={leftAxisSeries[0].color}
-                          fontSize={12}
-                          tickFormatter={(value) => value.toLocaleString()}
-                        />
-                      )}
-                      {rightAxisSeries.length > 0 && (
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          stroke={rightAxisSeries[0].color}
-                          fontSize={12}
-                          tickFormatter={(value) => value.toLocaleString()}
-                        />
-                      )}
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "var(--radius)",
-                        }}
-                        labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                        formatter={(value: number, name: string) => {
-                          const series = selectedSeries.find(s => s.id === name);
-                          return [value?.toLocaleString() ?? "N/A", series?.title || name];
-                        }}
-                      />
-                      <Legend
-                        formatter={(value) => {
-                          const series = selectedSeries.find(s => s.id === value);
-                          return series?.title || value;
-                        }}
-                      />
-                      {selectedSeries.map((series) => (
-                        <Line
-                          key={series.id}
-                          type="monotone"
-                          dataKey={series.id}
-                          stroke={series.color}
-                          yAxisId={series.axis}
-                          dot={false}
-                          strokeWidth={2}
-                          connectNulls
-                        />
-                      ))}
-                    </LineChart>
+                  <ResponsiveContainer width="100%" height={400}>
+                    {renderChart()}
                   </ResponsiveContainer>
                 )}
               </CardContent>
             </Card>
+
+            {/* Statistics Summary */}
+            <StatsSummary stats={seriesStats} />
+
+            {/* Data Table */}
+            <ExplorerDataTable data={chartData} selectedSeries={selectedSeries} />
           </div>
         </div>
       </div>
