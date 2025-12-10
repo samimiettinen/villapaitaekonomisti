@@ -8,6 +8,7 @@ import Admin from "./pages/Admin";
 import Analysis from "./pages/Analysis";
 import FredExplorer from "./pages/FredExplorer";
 import DataExplorer from "./pages/DataExplorer";
+import StatFinDashboard from "./pages/StatFinDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/fred" element={<FredExplorer />} />
           <Route path="/explore" element={<DataExplorer />} />
+          <Route path="/statfin" element={<StatFinDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
