@@ -72,6 +72,10 @@ Deno.serve(async (req) => {
       }
       // Remove leading slashes
       tablePath = tablePath.replace(/^\/+/, '');
+      // Prepend StatFin if path doesn't include a database prefix
+      if (!tablePath.includes("/") || !["StatFin", "Check", "Hyvinvointialueet", "Kokeelliset_tilastot", "Kuntien_avainluvut", "Kuntien_talous_ja_toiminta", "Maahanmuuttajat_ja_kotoutuminen", "NOVI-fi", "Postinumeroalueittainen_avoin_tieto", "SDG", "StatFin_Passiivi"].some(db => tablePath!.startsWith(db))) {
+        tablePath = `StatFin/${tablePath}`;
+      }
 
       const apiUrl = `${pxwebBaseUrl}/${tablePath}`;
       console.log("Fetching metadata from:", apiUrl);
@@ -97,6 +101,10 @@ Deno.serve(async (req) => {
       }
       // Remove leading slashes
       tablePath = tablePath.replace(/^\/+/, '');
+      // Prepend StatFin if path doesn't include a database prefix
+      if (!tablePath.includes("/") || !["StatFin", "Check", "Hyvinvointialueet", "Kokeelliset_tilastot", "Kuntien_avainluvut", "Kuntien_talous_ja_toiminta", "Maahanmuuttajat_ja_kotoutuminen", "NOVI-fi", "Postinumeroalueittainen_avoin_tieto", "SDG", "StatFin_Passiivi"].some(db => tablePath!.startsWith(db))) {
+        tablePath = `StatFin/${tablePath}`;
+      }
 
       const body = await req.json();
       const query: PxWebQuery = body.query;
@@ -132,6 +140,10 @@ Deno.serve(async (req) => {
       }
       // Remove leading slashes
       tablePath = tablePath.replace(/^\/+/, '');
+      // Prepend StatFin if path doesn't include a database prefix
+      if (!tablePath.includes("/") || !["StatFin", "Check", "Hyvinvointialueet", "Kokeelliset_tilastot", "Kuntien_avainluvut", "Kuntien_talous_ja_toiminta", "Maahanmuuttajat_ja_kotoutuminen", "NOVI-fi", "Postinumeroalueittainen_avoin_tieto", "SDG", "StatFin_Passiivi"].some(db => tablePath!.startsWith(db))) {
+        tablePath = `StatFin/${tablePath}`;
+      }
 
       const body = await req.json();
       const query: PxWebQuery = body.query;
