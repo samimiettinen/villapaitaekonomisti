@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -7,7 +6,9 @@ import {
   RefreshCw, 
   Download,
   Search,
-  Filter
+  Filter,
+  Table2,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { 
   STATFIN_INDICATORS, 
@@ -30,8 +31,17 @@ import {
   getIndicatorById,
   StatFinIndicator 
 } from "@/lib/statfinIndicators";
-import { statfinApi } from "@/lib/api";
+import {
+  StatFinTableMetadata,
+  buildDefaultQuery,
+  fetchTableData,
+  parseTimeSeriesData,
+  detectFrequency,
+  getTablePathString,
+  TimeSeriesPoint,
+} from "@/lib/statfinPxweb";
 import StatFinChart from "@/components/statfin/StatFinChart";
+import StatFinExplorer from "@/components/statfin/StatFinExplorer";
 
 interface TimeSeriesData {
   date: string;
@@ -41,7 +51,13 @@ interface TimeSeriesData {
 interface IndicatorData {
   indicatorId: string;
   data: TimeSeriesData[];
-  metadata: StatFinIndicator;
+  metadata: StatFinIndicator | { label: string; unit: string; frequency: string; category: string; description: string };
+}
+
+interface ExplorerTableData {
+  path: string[];
+  metadata: StatFinTableMetadata;
+  data: TimeSeriesPoint[];
 }
 
 const DATE_RANGE_OPTIONS = [
@@ -52,12 +68,19 @@ const DATE_RANGE_OPTIONS = [
 ];
 
 export default function StatFinDashboard() {
+  const [activeTab, setActiveTab] = useState<string>("explorer");
+  
+  // Curated indicators state
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<string>("10");
   const [fetchedData, setFetchedData] = useState<Map<string, IndicatorData>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Explorer state
+  const [explorerTables, setExplorerTables] = useState<ExplorerTableData[]>([]);
+  const [isLoadingExplorer, setIsLoadingExplorer] = useState(false);
 
   const categories = useMemo(() => getCategories(), []);
 
@@ -79,6 +102,58 @@ export default function StatFinDashboard() {
     );
   };
 
+  // Handle table selection from explorer
+  const handleExplorerTableSelected = async (
+    tablePath: string[], 
+    metadata: StatFinTableMetadata
+  ) => {
+    setIsLoadingExplorer(true);
+    
+    try {
+      // Build a default query
+      const query = buildDefaultQuery(metadata, 100); // Last 100 time periods
+      
+      // Fetch the data
+      const rawData = await fetchTableData(tablePath, query);
+      
+      // Parse into time series
+      const timeSeries = parseTimeSeriesData(rawData, metadata);
+      
+      if (timeSeries.length === 0) {
+        toast({
+          title: "No data",
+          description: "The selected table returned no time series data with the default query.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Add to explorer tables
+      setExplorerTables(prev => [
+        ...prev,
+        { path: tablePath, metadata, data: timeSeries }
+      ]);
+      
+      toast({
+        title: "Table loaded",
+        description: `Loaded ${timeSeries.length} data points from "${metadata.title}"`,
+      });
+    } catch (error) {
+      console.error("Failed to load table data:", error);
+      toast({
+        title: "Error loading data",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingExplorer(false);
+    }
+  };
+
+  const removeExplorerTable = (index: number) => {
+    setExplorerTables(prev => prev.filter((_, i) => i !== index));
+  };
+
   const fetchIndicatorData = async (indicator: StatFinIndicator): Promise<TimeSeriesData[]> => {
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
     const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -93,14 +168,16 @@ export default function StatFinDashboard() {
     });
     
     if (!metaResponse.ok) {
-      throw new Error(`Failed to fetch metadata for ${indicator.label}`);
+      const error = await metaResponse.json().catch(() => ({}));
+      throw new Error(error.error || `Failed to fetch metadata for ${indicator.label}`);
     }
     
     const metadata = await metaResponse.json();
     
     // Find the time variable and its values
     const timeVariable = metadata.variables?.find((v: any) => 
-      v.code === "Vuosineljännes" || v.code === "Kuukausi" || v.code === "Vuosi"
+      v.code === "Vuosineljännes" || v.code === "Kuukausi" || v.code === "Vuosi" ||
+      v.code.toLowerCase().includes("aika") || v.time === true
     );
     
     if (!timeVariable) {
@@ -170,11 +247,14 @@ export default function StatFinDashboard() {
           if (!isNaN(value) && timeKey) {
             // Normalize date format
             let date = timeKey;
-            if (timeKey.includes("Q")) {
+            if (timeKey.includes("Q") || timeKey.includes("K")) {
               // Quarterly format: 2024Q1 -> 2024-01
-              const [year, quarter] = timeKey.split("Q");
-              const month = (parseInt(quarter) - 1) * 3 + 1;
-              date = `${year}-${month.toString().padStart(2, "0")}`;
+              const match = timeKey.match(/^(\d{4})[QK](\d)$/);
+              if (match) {
+                const [, year, quarter] = match;
+                const month = (parseInt(quarter) - 1) * 3 + 1;
+                date = `${year}-${month.toString().padStart(2, "0")}`;
+              }
             } else if (timeKey.includes("M")) {
               // Monthly format: 2024M01 -> 2024-01
               date = timeKey.replace("M", "-");
@@ -238,16 +318,25 @@ export default function StatFinDashboard() {
   };
 
   const exportToCsv = () => {
-    if (fetchedData.size === 0) return;
+    // Combine curated and explorer data
+    const allData = [
+      ...Array.from(fetchedData.values()),
+      ...explorerTables.map(t => ({
+        indicatorId: getTablePathString(t.path),
+        data: t.data.map(p => ({ date: p.date, value: p.value })),
+        metadata: { label: t.metadata.title }
+      }))
+    ];
     
-    // Combine all data
+    if (allData.length === 0) return;
+    
     const allDates = new Set<string>();
-    fetchedData.forEach(d => d.data.forEach(p => allDates.add(p.date)));
+    allData.forEach(d => d.data.forEach(p => allDates.add(p.date)));
     const sortedDates = Array.from(allDates).sort();
     
-    const headers = ["Date", ...Array.from(fetchedData.values()).map(d => d.metadata.label)];
+    const headers = ["Date", ...allData.map(d => d.metadata.label)];
     const rows = sortedDates.map(date => {
-      const values = Array.from(fetchedData.values()).map(d => {
+      const values = allData.map(d => {
         const point = d.data.find(p => p.date === date);
         return point?.value ?? "";
       });
@@ -262,6 +351,8 @@ export default function StatFinDashboard() {
     a.download = "statfin_data.csv";
     a.click();
   };
+
+  const hasData = fetchedData.size > 0 || explorerTables.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -286,7 +377,7 @@ export default function StatFinDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {fetchedData.size > 0 && (
+              {hasData && (
                 <Button variant="outline" onClick={exportToCsv}>
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
@@ -298,191 +389,287 @@ export default function StatFinDashboard() {
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Panel - Indicator Selection */}
-          <div className="lg:col-span-1 space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  Select Indicators
-                </CardTitle>
-                <CardDescription>
-                  Choose economic indicators to visualize
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search indicators..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="explorer" className="flex items-center gap-2">
+              <Table2 className="h-4 w-4" />
+              Browse All Tables
+            </TabsTrigger>
+            <TabsTrigger value="curated" className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Curated Indicators
+            </TabsTrigger>
+          </TabsList>
 
-                {/* Category Filter */}
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All categories</SelectItem>
-                    {categories.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {/* Explorer Tab */}
+          <TabsContent value="explorer" className="space-y-6">
+            <StatFinExplorer 
+              onTableSelected={handleExplorerTableSelected}
+              onError={(err) => {
+                toast({
+                  title: "Explorer error",
+                  description: err.message,
+                  variant: "destructive",
+                });
+              }}
+            />
 
-                {/* Date Range */}
-                <div className="space-y-2">
-                  <Label>Date Range</Label>
-                  <Select value={dateRange} onValueChange={setDateRange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DATE_RANGE_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Indicator List */}
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {filteredIndicators.map(ind => (
-                    <div
-                      key={ind.id}
-                      className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <Checkbox
-                        id={ind.id}
-                        checked={selectedIndicators.includes(ind.id)}
-                        onCheckedChange={() => toggleIndicator(ind.id)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <Label 
-                          htmlFor={ind.id} 
-                          className="text-sm font-medium cursor-pointer block"
-                        >
-                          {ind.label}
-                        </Label>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-xs">
-                            {ind.category}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {ind.frequency === "Q" ? "Quarterly" : ind.frequency === "M" ? "Monthly" : "Annual"}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Fetch Button */}
-                <Button 
-                  onClick={handleFetchData} 
-                  className="w-full"
-                  disabled={selectedIndicators.length === 0 || isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Fetch Data ({selectedIndicators.length})
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Selected Summary */}
-            {selectedIndicators.length > 0 && (
+            {/* Explorer Loading State */}
+            {isLoadingExplorer && (
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Selected ({selectedIndicators.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedIndicators.map(id => {
-                      const ind = getIndicatorById(id);
-                      return (
-                        <Badge 
-                          key={id} 
-                          variant="default"
-                          className="cursor-pointer"
-                          onClick={() => toggleIndicator(id)}
-                        >
-                          {ind?.label.split(",")[0]}
-                          <span className="ml-1">×</span>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Main Content - Charts */}
-          <div className="lg:col-span-3 space-y-6">
-            {isLoading && (
-              <Card>
-                <CardContent className="py-12">
+                <CardContent className="py-8">
                   <div className="flex flex-col items-center justify-center gap-4">
                     <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-muted-foreground">Fetching data from Statistics Finland...</p>
+                    <p className="text-muted-foreground">Loading table data...</p>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {!isLoading && fetchedData.size === 0 && (
-              <Card>
-                <CardContent className="py-12">
-                  <div className="text-center text-muted-foreground">
-                    <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-medium mb-2">No Data Yet</h3>
-                    <p>Select indicators from the left panel and click "Fetch Data" to visualize.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {!isLoading && fetchedData.size > 0 && (
-              <>
-                {/* Individual Charts */}
-                {Array.from(fetchedData.values()).map(indicatorData => (
-                  <StatFinChart
-                    key={indicatorData.indicatorId}
-                    data={indicatorData.data}
-                    metadata={indicatorData.metadata}
-                  />
+            {/* Explorer Charts */}
+            {explorerTables.length > 0 && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Selected Tables ({explorerTables.length})</h2>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setExplorerTables([])}
+                  >
+                    Clear All
+                  </Button>
+                </div>
+                
+                {explorerTables.map((table, index) => (
+                  <Card key={`${getTablePathString(table.path)}-${index}`}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-base">{table.metadata.title}</CardTitle>
+                          <CardDescription className="text-xs mt-1">
+                            {getTablePathString(table.path)} • {table.data.length} observations
+                          </CardDescription>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeExplorerTable(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <StatFinChart
+                        data={table.data.map(p => ({ date: p.date, value: p.value }))}
+                        metadata={{
+                          id: getTablePathString(table.path),
+                          label: table.metadata.title,
+                          labelFi: table.metadata.title,
+                          category: 'Explorer',
+                          tablePath: getTablePathString(table.path),
+                          unit: '',
+                          frequency: detectFrequency(table.metadata) === 'unknown' ? 'A' : detectFrequency(table.metadata) as 'Q' | 'M' | 'A',
+                          description: '',
+                          query: []
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
                 ))}
-
-                {/* Combined Chart if multiple indicators */}
-                {fetchedData.size > 1 && (
-                  <StatFinChart
-                    data={[]}
-                    metadata={null as any}
-                    multipleData={Array.from(fetchedData.values())}
-                    title="Combined View"
-                  />
-                )}
-              </>
+              </div>
             )}
-          </div>
-        </div>
+          </TabsContent>
+
+          {/* Curated Indicators Tab */}
+          <TabsContent value="curated">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Left Panel - Indicator Selection */}
+              <div className="lg:col-span-1 space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Filter className="h-4 w-4" />
+                      Select Indicators
+                    </CardTitle>
+                    <CardDescription>
+                      Choose economic indicators to visualize
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search indicators..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+
+                    {/* Category Filter */}
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All categories</SelectItem>
+                        {categories.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Date Range */}
+                    <div className="space-y-2">
+                      <Label>Date Range</Label>
+                      <Select value={dateRange} onValueChange={setDateRange}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DATE_RANGE_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Indicator List */}
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {filteredIndicators.map(ind => (
+                        <div
+                          key={ind.id}
+                          className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                        >
+                          <Checkbox
+                            id={ind.id}
+                            checked={selectedIndicators.includes(ind.id)}
+                            onCheckedChange={() => toggleIndicator(ind.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <Label 
+                              htmlFor={ind.id} 
+                              className="text-sm font-medium cursor-pointer block"
+                            >
+                              {ind.label}
+                            </Label>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {ind.category}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {ind.frequency === "Q" ? "Quarterly" : ind.frequency === "M" ? "Monthly" : "Annual"}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Fetch Button */}
+                    <Button 
+                      onClick={handleFetchData} 
+                      className="w-full"
+                      disabled={selectedIndicators.length === 0 || isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Fetching...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Fetch Data ({selectedIndicators.length})
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Selected Summary */}
+                {selectedIndicators.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Selected ({selectedIndicators.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedIndicators.map(id => {
+                          const ind = getIndicatorById(id);
+                          return (
+                            <Badge 
+                              key={id} 
+                              variant="default"
+                              className="cursor-pointer"
+                              onClick={() => toggleIndicator(id)}
+                            >
+                              {ind?.label.split(",")[0]}
+                              <span className="ml-1">×</span>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Main Content - Charts */}
+              <div className="lg:col-span-3 space-y-6">
+                {isLoading && (
+                  <Card>
+                    <CardContent className="py-12">
+                      <div className="flex flex-col items-center justify-center gap-4">
+                        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-muted-foreground">Fetching data from Statistics Finland...</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {!isLoading && fetchedData.size === 0 && (
+                  <Card>
+                    <CardContent className="py-12">
+                      <div className="text-center text-muted-foreground">
+                        <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-medium mb-2">No Data Yet</h3>
+                        <p>Select indicators from the left panel and click "Fetch Data" to visualize.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {!isLoading && fetchedData.size > 0 && (
+                  <>
+                    {/* Individual Charts */}
+                    {Array.from(fetchedData.values()).map(indicatorData => (
+                      <StatFinChart
+                        key={indicatorData.indicatorId}
+                        data={indicatorData.data}
+                        metadata={indicatorData.metadata as StatFinIndicator}
+                      />
+                    ))}
+
+                    {/* Combined Chart if multiple indicators */}
+                    {fetchedData.size > 1 && (
+                      <StatFinChart
+                        data={[]}
+                        metadata={null as any}
+                        multipleData={Array.from(fetchedData.values()).filter(d => 'id' in d.metadata) as any}
+                        title="Combined View"
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
