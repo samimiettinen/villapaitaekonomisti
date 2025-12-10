@@ -235,6 +235,20 @@ const DataExplorer = () => {
   };
 
   const navigateStatfin = async (item: StatFinItem) => {
+    // If it's a leaf table (type "l"), select it as a series instead of navigating
+    if (item.type === "l") {
+      const tablePath = [...statfinPath, item.id].join("/");
+      const series: DataSeries = {
+        id: `STATFIN_${tablePath.replace(/\//g, "_")}`,
+        title: item.text,
+        source: "STATFIN",
+        path: tablePath,
+      };
+      handleSelectSeries(series);
+      return;
+    }
+    
+    // It's a folder (type "t" or other), navigate into it
     setStatfinLoading(true);
     const newPath = [...statfinPath, item.id];
     
@@ -244,17 +258,14 @@ const DataExplorer = () => {
       if (Array.isArray(data)) {
         setStatfinItems(data);
         setStatfinPath(newPath);
-      } else if (item.type === "t") {
-        const series: DataSeries = {
-          id: `STATFIN_${newPath.join("_")}`,
-          title: item.text,
-          source: "STATFIN",
-          path: newPath.join("/"),
-        };
-        handleSelectSeries(series);
       }
     } catch (error) {
       console.error("Navigation error:", error);
+      toast({
+        title: "Navigation failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
     }
     setStatfinLoading(false);
   };
