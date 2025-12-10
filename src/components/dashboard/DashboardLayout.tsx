@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { TrendingUp, LayoutDashboard, Search, BarChart3, Settings, Database } from "lucide-react";
+import { TrendingUp, LayoutDashboard, Search, BarChart3, Settings, Database, Building2 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 interface DashboardLayoutProps {
@@ -47,6 +47,14 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               >
                 <Database className="h-4 w-4" />
                 FRED
+              </NavLink>
+              <NavLink 
+                to="/statfin"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"
+                activeClassName="text-primary bg-primary/10"
+              >
+                <Building2 className="h-4 w-4" />
+                StatFin
               </NavLink>
               <NavLink 
                 to="/analysis"
