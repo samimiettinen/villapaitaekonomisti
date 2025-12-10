@@ -44,8 +44,19 @@ Deno.serve(async (req) => {
 
     // List tables in a database
     if (action === "tables") {
-      const databasePath = url.searchParams.get("databasePath") || "StatFin";
-      const response = await fetch(`${pxwebBaseUrl}/${databasePath}`);
+      let databasePath = url.searchParams.get("databasePath") || "StatFin";
+      // Remove leading/trailing slashes to avoid double slashes in URL
+      databasePath = databasePath.replace(/^\/+|\/+$/g, '');
+      
+      const apiUrl = `${pxwebBaseUrl}/${databasePath}`;
+      console.log("Fetching tables from:", apiUrl);
+      
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("StatFin API error:", response.status, errorText);
+        throw new Error(`StatFin API returned ${response.status}: ${errorText}`);
+      }
       const data = await response.json();
 
       return new Response(JSON.stringify(data), {
@@ -55,12 +66,22 @@ Deno.serve(async (req) => {
 
     // Get table metadata
     if (action === "metadata") {
-      const tablePath = url.searchParams.get("tablePath");
+      let tablePath = url.searchParams.get("tablePath");
       if (!tablePath) {
         throw new Error("tablePath required");
       }
+      // Remove leading slashes
+      tablePath = tablePath.replace(/^\/+/, '');
 
-      const response = await fetch(`${pxwebBaseUrl}/${tablePath}`);
+      const apiUrl = `${pxwebBaseUrl}/${tablePath}`;
+      console.log("Fetching metadata from:", apiUrl);
+      
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("StatFin API error:", response.status, errorText);
+        throw new Error(`StatFin API returned ${response.status}: ${errorText}`);
+      }
       const data = await response.json();
 
       return new Response(JSON.stringify(data), {
@@ -70,15 +91,20 @@ Deno.serve(async (req) => {
 
     // Fetch table data
     if (action === "data") {
-      const tablePath = url.searchParams.get("tablePath");
+      let tablePath = url.searchParams.get("tablePath");
       if (!tablePath) {
         throw new Error("tablePath required");
       }
+      // Remove leading slashes
+      tablePath = tablePath.replace(/^\/+/, '');
 
       const body = await req.json();
       const query: PxWebQuery = body.query;
 
-      const response = await fetch(`${pxwebBaseUrl}/${tablePath}`, {
+      const apiUrl = `${pxwebBaseUrl}/${tablePath}`;
+      console.log("Fetching data from:", apiUrl);
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,6 +112,11 @@ Deno.serve(async (req) => {
         body: JSON.stringify(query),
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("StatFin API error:", response.status, errorText);
+        throw new Error(`StatFin API returned ${response.status}: ${errorText}`);
+      }
       const data = await response.json();
 
       return new Response(JSON.stringify(data), {
@@ -95,10 +126,12 @@ Deno.serve(async (req) => {
 
     // Ingest table into database
     if (action === "ingest") {
-      const tablePath = url.searchParams.get("tablePath");
+      let tablePath = url.searchParams.get("tablePath");
       if (!tablePath) {
         throw new Error("tablePath required");
       }
+      // Remove leading slashes
+      tablePath = tablePath.replace(/^\/+/, '');
 
       const body = await req.json();
       const query: PxWebQuery = body.query;
@@ -107,12 +140,20 @@ Deno.serve(async (req) => {
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
+      const apiUrl = `${pxwebBaseUrl}/${tablePath}`;
+      console.log("Ingesting from:", apiUrl);
+
       // Fetch metadata
-      const metaResponse = await fetch(`${pxwebBaseUrl}/${tablePath}`);
+      const metaResponse = await fetch(apiUrl);
+      if (!metaResponse.ok) {
+        const errorText = await metaResponse.text();
+        console.error("StatFin metadata error:", metaResponse.status, errorText);
+        throw new Error(`StatFin API returned ${metaResponse.status}: ${errorText}`);
+      }
       const metadata = await metaResponse.json();
 
       // Fetch data
-      const dataResponse = await fetch(`${pxwebBaseUrl}/${tablePath}`, {
+      const dataResponse = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -120,6 +161,11 @@ Deno.serve(async (req) => {
         body: JSON.stringify(query),
       });
 
+      if (!dataResponse.ok) {
+        const errorText = await dataResponse.text();
+        console.error("StatFin data error:", dataResponse.status, errorText);
+        throw new Error(`StatFin API returned ${dataResponse.status}: ${errorText}`);
+      }
       const data = await dataResponse.json();
 
       // Extract series ID and title from metadata
