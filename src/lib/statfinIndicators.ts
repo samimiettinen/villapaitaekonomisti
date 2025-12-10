@@ -1,5 +1,6 @@
 // StatFin Indicator Configuration
 // Curated list of key Finnish economic indicators from Statistics Finland
+// Updated to match actual PxWeb API variable codes and values
 
 export interface StatFinIndicator {
   id: string;
@@ -20,16 +21,17 @@ export interface StatFinIndicator {
 }
 
 export const STATFIN_INDICATORS: StatFinIndicator[] = [
-  // GDP and National Accounts
+  // GDP and National Accounts (from statfin_ntp_pxt_132h.px)
+  // Variables: Vuosineljännes (time), Taloustoimi, Tiedot
   {
     id: "fin_gdp_volume_q",
-    label: "GDP, volume index (2015=100), quarterly",
-    labelFi: "BKT, volyymi-indeksi (2015=100), neljännesvuosi",
+    label: "GDP, seasonally adjusted volume (ref. 2015), quarterly",
+    labelFi: "BKT, kausitasoitettu volyymi (viite 2015), neljännesvuosi",
     category: "National Accounts",
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
-    unit: "Index (2015=100)",
+    unit: "Million EUR (2015 prices)",
     frequency: "Q",
-    description: "Finland's gross domestic product volume index, seasonally adjusted",
+    description: "Finland's gross domestic product, seasonally adjusted, reference year 2015",
     query: [
       {
         code: "Taloustoimi",
@@ -42,20 +44,20 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["indeksi_tvk"] // Volume index, seasonally adjusted
+          values: ["kausitvv2015"] // Seasonally adjusted, reference year 2015
         }
       }
     ]
   },
   {
     id: "fin_gdp_current_q",
-    label: "GDP, current prices (million EUR), quarterly",
-    labelFi: "BKT, käypiin hintoihin (milj. EUR), neljännesvuosi",
+    label: "GDP, seasonally adjusted current prices (million EUR), quarterly",
+    labelFi: "BKT, kausitasoitettu käypiin hintoihin (milj. EUR), neljännesvuosi",
     category: "National Accounts",
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     unit: "Million EUR",
     frequency: "Q",
-    description: "Finland's gross domestic product at current prices",
+    description: "Finland's gross domestic product at current prices, seasonally adjusted",
     query: [
       {
         code: "Taloustoimi",
@@ -68,16 +70,18 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["kausitasoitettu"] // Seasonally adjusted, current prices
+          values: ["kausitcp"] // Seasonally adjusted, current prices
         }
       }
     ]
   },
-  // Employment
+  // Employment (from statfin_tyti_pxt_135z.px)
+  // Variables: Kuukausi (time), Tiedot
+  // NOTE: This table does NOT have Sukupuoli variable - it's a key indicators summary table
   {
     id: "fin_employment_rate_m",
-    label: "Employment rate (%), monthly",
-    labelFi: "Työllisyysaste (%), kuukausi",
+    label: "Employment rate 15-64 (%), trend, monthly",
+    labelFi: "Työllisyysaste 15-64 (%), trendi, kuukausi",
     category: "Labour Market",
     tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
     unit: "%",
@@ -85,25 +89,18 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
     description: "Employment rate of population aged 15-64, trend",
     query: [
       {
-        code: "Sukupuoli",
-        selection: {
-          filter: "item",
-          values: ["SSS"] // Both sexes
-        }
-      },
-      {
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["Työllisyysaste_t"] // Employment rate, trend
+          values: ["tyollaste_15_64_trendi"] // Employment rate 15-64, trend
         }
       }
     ]
   },
   {
     id: "fin_unemployment_rate_m",
-    label: "Unemployment rate (%), monthly",
-    labelFi: "Työttömyysaste (%), kuukausi",
+    label: "Unemployment rate (%), trend, monthly",
+    labelFi: "Työttömyysaste (%), trendi, kuukausi",
     category: "Labour Market",
     tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
     unit: "%",
@@ -111,22 +108,53 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
     description: "Unemployment rate, trend",
     query: [
       {
-        code: "Sukupuoli",
-        selection: {
-          filter: "item",
-          values: ["SSS"]
-        }
-      },
-      {
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["Työttömyysaste_t"] // Unemployment rate, trend
+          values: ["tyottaste_trendi"] // Unemployment rate, trend
         }
       }
     ]
   },
-  // Foreign Trade
+  {
+    id: "fin_employed_m",
+    label: "Employed persons (1000), trend, monthly",
+    labelFi: "Työlliset (1000 henkeä), trendi, kuukausi",
+    category: "Labour Market",
+    tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
+    unit: "1000 persons",
+    frequency: "M",
+    description: "Number of employed persons, trend",
+    query: [
+      {
+        code: "Tiedot",
+        selection: {
+          filter: "item",
+          values: ["tyolliset_trendi"] // Employed, trend
+        }
+      }
+    ]
+  },
+  {
+    id: "fin_unemployed_m",
+    label: "Unemployed persons (1000), trend, monthly",
+    labelFi: "Työttömät (1000 henkeä), trendi, kuukausi",
+    category: "Labour Market",
+    tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
+    unit: "1000 persons",
+    frequency: "M",
+    description: "Number of unemployed persons, trend",
+    query: [
+      {
+        code: "Tiedot",
+        selection: {
+          filter: "item",
+          values: ["tyottomat_trendi"] // Unemployed, trend
+        }
+      }
+    ]
+  },
+  // Foreign Trade (from statfin_ntp_pxt_132h.px)
   {
     id: "fin_exports_q",
     label: "Exports of goods and services (million EUR), quarterly",
@@ -135,20 +163,20 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     unit: "Million EUR",
     frequency: "Q",
-    description: "Total exports of goods and services",
+    description: "Total exports of goods and services, seasonally adjusted",
     query: [
       {
         code: "Taloustoimi",
         selection: {
           filter: "item",
-          values: ["P6"] // Exports
+          values: ["P6K"] // Exports of goods and services, expenditure
         }
       },
       {
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["kausitasoitettu"]
+          values: ["kausitcp"] // Seasonally adjusted, current prices
         }
       }
     ]
@@ -161,145 +189,25 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     unit: "Million EUR",
     frequency: "Q",
-    description: "Total imports of goods and services",
+    description: "Total imports of goods and services, seasonally adjusted",
     query: [
       {
         code: "Taloustoimi",
         selection: {
           filter: "item",
-          values: ["P7"] // Imports
+          values: ["P7R"] // Imports of goods and services, income
         }
       },
       {
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["kausitasoitettu"]
+          values: ["kausitcp"]
         }
       }
     ]
   },
-  // Government Finance
-  {
-    id: "fin_gov_expenditure_q",
-    label: "General government expenditure (million EUR), quarterly",
-    labelFi: "Julkisyhteisöjen menot (milj. EUR), neljännesvuosi",
-    category: "Government Finance",
-    tablePath: "StatFin/jynt/statfin_jynt_pxt_12bs.px",
-    unit: "Million EUR",
-    frequency: "Q",
-    description: "Total general government expenditure",
-    query: [
-      {
-        code: "Sektori",
-        selection: {
-          filter: "item",
-          values: ["S13"] // General government
-        }
-      },
-      {
-        code: "Taloustoimi",
-        selection: {
-          filter: "item",
-          values: ["OTE"] // Total expenditure
-        }
-      },
-      {
-        code: "Tiedot",
-        selection: {
-          filter: "item",
-          values: ["Kausi_milj"]
-        }
-      }
-    ]
-  },
-  {
-    id: "fin_gov_revenue_q",
-    label: "General government revenue (million EUR), quarterly",
-    labelFi: "Julkisyhteisöjen tulot (milj. EUR), neljännesvuosi",
-    category: "Government Finance",
-    tablePath: "StatFin/jynt/statfin_jynt_pxt_12bs.px",
-    unit: "Million EUR",
-    frequency: "Q",
-    description: "Total general government revenue",
-    query: [
-      {
-        code: "Sektori",
-        selection: {
-          filter: "item",
-          values: ["S13"]
-        }
-      },
-      {
-        code: "Taloustoimi",
-        selection: {
-          filter: "item",
-          values: ["OTR"] // Total revenue
-        }
-      },
-      {
-        code: "Tiedot",
-        selection: {
-          filter: "item",
-          values: ["Kausi_milj"]
-        }
-      }
-    ]
-  },
-  // Prices and Inflation
-  {
-    id: "fin_cpi_m",
-    label: "Consumer Price Index (2015=100), monthly",
-    labelFi: "Kuluttajahintaindeksi (2015=100), kuukausi",
-    category: "Prices",
-    tablePath: "StatFin/khi/statfin_khi_pxt_11xq.px",
-    unit: "Index (2015=100)",
-    frequency: "M",
-    description: "Consumer price index, all items",
-    query: [
-      {
-        code: "Hyödyke",
-        selection: {
-          filter: "item",
-          values: ["0"] // All items
-        }
-      },
-      {
-        code: "Tiedot",
-        selection: {
-          filter: "item",
-          values: ["indeksipisteluku"]
-        }
-      }
-    ]
-  },
-  {
-    id: "fin_inflation_yoy_m",
-    label: "Inflation rate (% YoY), monthly",
-    labelFi: "Inflaatio (% vuosimuutos), kuukausi",
-    category: "Prices",
-    tablePath: "StatFin/khi/statfin_khi_pxt_11xq.px",
-    unit: "%",
-    frequency: "M",
-    description: "Year-on-year change in consumer price index",
-    query: [
-      {
-        code: "Hyödyke",
-        selection: {
-          filter: "item",
-          values: ["0"]
-        }
-      },
-      {
-        code: "Tiedot",
-        selection: {
-          filter: "item",
-          values: ["vuosimuutos"]
-        }
-      }
-    ]
-  },
-  // Private Consumption
+  // Private Consumption (from statfin_ntp_pxt_132h.px)
   {
     id: "fin_private_consumption_q",
     label: "Private consumption (million EUR), quarterly",
@@ -308,25 +216,25 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     unit: "Million EUR",
     frequency: "Q",
-    description: "Private final consumption expenditure",
+    description: "Private final consumption expenditure, seasonally adjusted",
     query: [
       {
         code: "Taloustoimi",
         selection: {
           filter: "item",
-          values: ["P31_S14"] // Private consumption
+          values: ["P3KS14_S15"] // Private consumption expenditure (S14+S15)
         }
       },
       {
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["kausitasoitettu"]
+          values: ["kausitcp"]
         }
       }
     ]
   },
-  // Investment
+  // Investment (from statfin_ntp_pxt_132h.px)
   {
     id: "fin_investment_q",
     label: "Gross fixed capital formation (million EUR), quarterly",
@@ -335,20 +243,73 @@ export const STATFIN_INDICATORS: StatFinIndicator[] = [
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     unit: "Million EUR",
     frequency: "Q",
-    description: "Gross fixed capital formation (investment)",
+    description: "Gross fixed capital formation (investment), seasonally adjusted",
     query: [
       {
         code: "Taloustoimi",
         selection: {
           filter: "item",
-          values: ["P51"] // Gross fixed capital formation
+          values: ["P51K"] // Gross fixed capital formation, expenditure
         }
       },
       {
         code: "Tiedot",
         selection: {
           filter: "item",
-          values: ["kausitasoitettu"]
+          values: ["kausitcp"]
+        }
+      }
+    ]
+  },
+  // GDP Growth Rate
+  {
+    id: "fin_gdp_growth_qoq",
+    label: "GDP growth (% QoQ), quarterly",
+    labelFi: "BKT:n kasvu (% edell. neljänneksestä), neljännesvuosi",
+    category: "National Accounts",
+    tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
+    unit: "%",
+    frequency: "Q",
+    description: "GDP volume change from previous quarter, seasonally adjusted",
+    query: [
+      {
+        code: "Taloustoimi",
+        selection: {
+          filter: "item",
+          values: ["B1GMH"]
+        }
+      },
+      {
+        code: "Tiedot",
+        selection: {
+          filter: "item",
+          values: ["vol_kk_kausitvv2015"] // Change from previous quarter
+        }
+      }
+    ]
+  },
+  {
+    id: "fin_gdp_growth_yoy",
+    label: "GDP growth (% YoY), quarterly",
+    labelFi: "BKT:n kasvu (% edell. vuodesta), neljännesvuosi",
+    category: "National Accounts",
+    tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
+    unit: "%",
+    frequency: "Q",
+    description: "GDP volume change from previous year, seasonally adjusted",
+    query: [
+      {
+        code: "Taloustoimi",
+        selection: {
+          filter: "item",
+          values: ["B1GMH"]
+        }
+      },
+      {
+        code: "Tiedot",
+        selection: {
+          filter: "item",
+          values: ["vol_vv_kausitvv2015"] // Change from previous year
         }
       }
     ]
@@ -376,7 +337,7 @@ export function getCategories(): string[] {
   return [...new Set(STATFIN_INDICATORS.map(ind => ind.category))];
 }
 
-export function getIndicatorQueryConfig(id: string): { tablePath: string; query: any } | null {
+export function getIndicatorQueryConfig(id: string): { tablePath: string; query: { query: typeof STATFIN_INDICATORS[0]['query']; response: { format: string } } } | null {
   const indicator = getIndicatorById(id);
   if (!indicator) return null;
   
