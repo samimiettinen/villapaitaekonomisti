@@ -33,15 +33,16 @@ import {
 } from "@/lib/statfinIndicators";
 import {
   StatFinTableMetadata,
+  StatFinDataResponse,
   buildDefaultQuery,
   fetchTableData,
-  parseTimeSeriesData,
   detectFrequency,
   getTablePathString,
-  TimeSeriesPoint,
 } from "@/lib/statfinPxweb";
+import { transformPxWebResponse, StatFinTableData } from "@/lib/statfinTransform";
 import StatFinChart from "@/components/statfin/StatFinChart";
 import StatFinExplorer from "@/components/statfin/StatFinExplorer";
+import StatFinResultView from "@/components/statfin/StatFinResultView";
 
 interface TimeSeriesData {
   date: string;
@@ -54,10 +55,11 @@ interface IndicatorData {
   metadata: StatFinIndicator | { label: string; unit: string; frequency: string; category: string; description: string };
 }
 
-interface ExplorerTableData {
+interface ExplorerTableResult {
   path: string[];
   metadata: StatFinTableMetadata;
-  data: TimeSeriesPoint[];
+  tableData: StatFinTableData;
+  rawResponse: StatFinDataResponse;
 }
 
 const DATE_RANGE_OPTIONS = [
@@ -78,8 +80,8 @@ export default function StatFinDashboard() {
   const [fetchedData, setFetchedData] = useState<Map<string, IndicatorData>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   
-  // Explorer state
-  const [explorerTables, setExplorerTables] = useState<ExplorerTableData[]>([]);
+  // Explorer state - now stores table data for table-first view
+  const [explorerResults, setExplorerResults] = useState<ExplorerTableResult[]>([]);
   const [isLoadingExplorer, setIsLoadingExplorer] = useState(false);
 
   const categories = useMemo(() => getCategories(), []);
@@ -102,7 +104,7 @@ export default function StatFinDashboard() {
     );
   };
 
-  // Handle table selection from explorer
+  // Handle table selection from explorer - now transforms to table data
   const handleExplorerTableSelected = async (
     tablePath: string[], 
     metadata: StatFinTableMetadata
@@ -113,30 +115,30 @@ export default function StatFinDashboard() {
       // Build a default query
       const query = buildDefaultQuery(metadata, 100); // Last 100 time periods
       
-      // Fetch the data
-      const rawData = await fetchTableData(tablePath, query);
+      // Fetch the raw data
+      const rawResponse = await fetchTableData(tablePath, query);
       
-      // Parse into time series
-      const timeSeries = parseTimeSeriesData(rawData, metadata);
+      // Transform to normalized table structure
+      const tableData = transformPxWebResponse(rawResponse, metadata);
       
-      if (timeSeries.length === 0) {
+      if (tableData.rows.length === 0) {
         toast({
           title: "No data",
-          description: "The selected table returned no time series data with the default query.",
+          description: "The selected table returned no data with the default query.",
           variant: "destructive",
         });
         return;
       }
       
-      // Add to explorer tables
-      setExplorerTables(prev => [
+      // Add to explorer results
+      setExplorerResults(prev => [
         ...prev,
-        { path: tablePath, metadata, data: timeSeries }
+        { path: tablePath, metadata, tableData, rawResponse }
       ]);
       
       toast({
         title: "Table loaded",
-        description: `Loaded ${timeSeries.length} data points from "${metadata.title}"`,
+        description: `Loaded ${tableData.rows.length} rows from "${metadata.title}"`,
       });
     } catch (error) {
       console.error("Failed to load table data:", error);
@@ -150,8 +152,8 @@ export default function StatFinDashboard() {
     }
   };
 
-  const removeExplorerTable = (index: number) => {
-    setExplorerTables(prev => prev.filter((_, i) => i !== index));
+  const removeExplorerResult = (index: number) => {
+    setExplorerResults(prev => prev.filter((_, i) => i !== index));
   };
 
   const fetchIndicatorData = async (indicator: StatFinIndicator): Promise<TimeSeriesData[]> => {
@@ -318,15 +320,8 @@ export default function StatFinDashboard() {
   };
 
   const exportToCsv = () => {
-    // Combine curated and explorer data
-    const allData = [
-      ...Array.from(fetchedData.values()),
-      ...explorerTables.map(t => ({
-        indicatorId: getTablePathString(t.path),
-        data: t.data.map(p => ({ date: p.date, value: p.value })),
-        metadata: { label: t.metadata.title }
-      }))
-    ];
+    // Export from curated indicators
+    const allData = Array.from(fetchedData.values());
     
     if (allData.length === 0) return;
     
@@ -352,7 +347,7 @@ export default function StatFinDashboard() {
     a.click();
   };
 
-  const hasData = fetchedData.size > 0 || explorerTables.length > 0;
+  const hasData = fetchedData.size > 0 || explorerResults.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -377,10 +372,10 @@ export default function StatFinDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {hasData && (
+              {fetchedData.size > 0 && (
                 <Button variant="outline" onClick={exportToCsv}>
                   <Download className="h-4 w-4 mr-2" />
-                  Export CSV
+                  Export Curated CSV
                 </Button>
               )}
             </div>
@@ -401,7 +396,7 @@ export default function StatFinDashboard() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Explorer Tab */}
+          {/* Explorer Tab - Table-first view */}
           <TabsContent value="explorer" className="space-y-6">
             <StatFinExplorer 
               onTableSelected={handleExplorerTableSelected}
@@ -426,56 +421,32 @@ export default function StatFinDashboard() {
               </Card>
             )}
 
-            {/* Explorer Charts */}
-            {explorerTables.length > 0 && (
+            {/* Explorer Results - Table-first view */}
+            {explorerResults.length > 0 && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Selected Tables ({explorerTables.length})</h2>
+                  <h2 className="text-lg font-semibold">Selected Tables ({explorerResults.length})</h2>
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => setExplorerTables([])}
+                    onClick={() => setExplorerResults([])}
                   >
                     Clear All
                   </Button>
                 </div>
                 
-                {explorerTables.map((table, index) => (
-                  <Card key={`${getTablePathString(table.path)}-${index}`}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-base">{table.metadata.title}</CardTitle>
-                          <CardDescription className="text-xs mt-1">
-                            {getTablePathString(table.path)} • {table.data.length} observations
-                          </CardDescription>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => removeExplorerTable(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <StatFinChart
-                        data={table.data.map(p => ({ date: p.date, value: p.value }))}
-                        metadata={{
-                          id: getTablePathString(table.path),
-                          label: table.metadata.title,
-                          labelFi: table.metadata.title,
-                          category: 'Explorer',
-                          tablePath: getTablePathString(table.path),
-                          unit: '',
-                          frequency: detectFrequency(table.metadata) === 'unknown' ? 'A' : detectFrequency(table.metadata) as 'Q' | 'M' | 'A',
-                          description: '',
-                          query: []
-                        }}
-                      />
-                    </CardContent>
-                  </Card>
+                {explorerResults.map((result, index) => (
+                  <div key={`${getTablePathString(result.path)}-${index}`} className="relative">
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="absolute right-2 top-2 z-10"
+                      onClick={() => removeExplorerResult(index)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <StatFinResultView tableData={result.tableData} />
+                  </div>
                 ))}
               </div>
             )}
