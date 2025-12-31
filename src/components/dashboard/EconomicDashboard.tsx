@@ -18,6 +18,12 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
     currency: "USD",
   },
   {
+    seriesId: "STATFIN_GDP",
+    label: "Finnish GDP",
+    source: "STATFIN",
+    currency: "EUR",
+  },
+  {
     seriesId: "FRED_CPIAUCSL",
     label: "US Consumer Price Index",
     source: "FRED",
@@ -52,6 +58,26 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
 // FRED series IDs for refresh functionality
 const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DEXUSEU"];
 
+// StatFin GDP ingest configuration
+const STATFIN_GDP_CONFIG = {
+  tablePath: "StatFin/vtp/statfin_vtp_pxt_11sf.px",
+  seriesId: "STATFIN_GDP",
+  title: "Finnish GDP, current prices, million EUR",
+  query: {
+    query: [
+      {
+        code: "Taloustoimi",
+        selection: { filter: "item", values: ["B1GMH"] } // GDP at market prices
+      },
+      {
+        code: "Tiedot",
+        selection: { filter: "item", values: ["CP"] } // Current prices
+      }
+    ],
+    response: { format: "json" }
+  }
+};
+
 export const EconomicDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
@@ -71,20 +97,33 @@ export const EconomicDashboard = () => {
           console.log(`Refreshing ${seriesId}...`);
           await fredApi.ingest(seriesId);
           successCount++;
-          // Wait 2 seconds between calls to let edge function resources reset
           await delay(2000);
         } catch (err) {
           console.error(`Failed to refresh ${seriesId}:`, err);
           errorCount++;
-          // Wait a bit longer after an error
           await delay(3000);
         }
+      }
+
+      // Refresh StatFin GDP
+      try {
+        console.log("Refreshing StatFin GDP...");
+        await statfinApi.ingest(
+          STATFIN_GDP_CONFIG.tablePath,
+          STATFIN_GDP_CONFIG.query,
+          STATFIN_GDP_CONFIG.seriesId,
+          STATFIN_GDP_CONFIG.title
+        );
+        successCount++;
+      } catch (err) {
+        console.error("Failed to refresh StatFin GDP:", err);
+        errorCount++;
       }
 
       if (errorCount === 0) {
         toast({
           title: "Data refreshed successfully",
-          description: `Updated ${successCount} indicators from FRED.`,
+          description: `Updated ${successCount} indicators from FRED and StatFin.`,
         });
       } else {
         toast({
@@ -158,5 +197,4 @@ export const EconomicDashboard = () => {
   );
 };
 
-// Export for customization
-export { FEATURED_INDICATORS, FRED_SERIES_IDS };
+export { FEATURED_INDICATORS, FRED_SERIES_IDS, STATFIN_GDP_CONFIG };
