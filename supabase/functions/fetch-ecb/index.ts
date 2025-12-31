@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
       const dataflowId = url.searchParams.get("dataflowId");
       const seriesKey = url.searchParams.get("seriesKey") || "..";
       const title = url.searchParams.get("title") || dataflowId;
+      const customSeriesId = url.searchParams.get("seriesId"); // Allow custom series ID
       
       if (!dataflowId) throw new Error("dataflowId required");
 
@@ -156,7 +157,10 @@ Deno.serve(async (req) => {
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      const seriesId = `ECB_${dataflowId}_${seriesKey.replace(/\./g, "_")}`;
+      // Use custom seriesId if provided, otherwise generate from dataflow/key
+      const seriesId = customSeriesId || `ECB_${dataflowId}_${seriesKey.replace(/\./g, "_")}`;
+      
+      console.log("ECB ingest:", { dataflowId, seriesKey, seriesId, title });
 
       // Insert series metadata
       const { error: seriesError } = await supabase.from("series").upsert({

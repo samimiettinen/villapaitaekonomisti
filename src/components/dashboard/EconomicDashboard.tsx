@@ -87,15 +87,16 @@ const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DE
 // StatFin ingest configurations - use Finnish language API for Finnish codes
 const STATFIN_CONFIGS = [
   {
-    // Use quarterly GDP table which is simpler
+    // Quarterly GDP table - need to include Vuosineljännes dimension
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     seriesId: "STATFIN_GDP",
     title: "Finnish GDP, quarterly, million EUR",
     language: "fi",
     query: {
       query: [
+        { code: "Vuosineljännes", selection: { filter: "all", values: ["*"] } }, // All quarters
         { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } }, // GDP
-        { code: "Tiedot", selection: { filter: "item", values: ["cp_eur"] } } // Current prices EUR
+        { code: "Tiedot", selection: { filter: "item", values: ["CP_MEUR"] } } // Current prices, million EUR
       ],
       response: { format: "json" }
     }
@@ -114,15 +115,14 @@ const STATFIN_CONFIGS = [
     }
   },
   {
-    // Use simpler monthly unemployment rate table
+    // Monthly unemployment - table 135z has Kuukausi and Tiedot only
     tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
     seriesId: "STATFIN_UNEMPLOYMENT",
     title: "Finnish Unemployment Rate, %",
     language: "fi",
     query: {
       query: [
-        { code: "Sukupuoli", selection: { filter: "item", values: ["SSS"] } }, // Both sexes
-        { code: "Tiedot", selection: { filter: "item", values: ["tyottomyysaste"] } } // Unemployment rate
+        { code: "Tiedot", selection: { filter: "item", values: ["Työttömyysaste"] } } // Unemployment rate
       ],
       response: { format: "json" }
     }
@@ -195,11 +195,11 @@ export const EconomicDashboard = () => {
         }
       }
 
-      // Refresh ECB indicators
+      // Refresh ECB indicators with custom series IDs
       for (const config of ECB_CONFIGS) {
         try {
           console.log(`Refreshing ${config.seriesId}...`);
-          await ecbApi.ingest(config.dataflowId, config.seriesKey, config.title);
+          await ecbApi.ingest(config.dataflowId, config.seriesKey, config.title, config.seriesId);
           successCount++;
           await delay(2000);
         } catch (err) {

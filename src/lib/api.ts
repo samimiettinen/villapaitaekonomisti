@@ -156,8 +156,11 @@ export const ecbApi = {
     return await response.json();
   },
 
-  async ingest(dataflowId: string, seriesKey: string, title: string) {
-    const url = `${SUPABASE_URL}/functions/v1/fetch-ecb?action=ingest&dataflowId=${encodeURIComponent(dataflowId)}&seriesKey=${encodeURIComponent(seriesKey)}&title=${encodeURIComponent(title)}`;
+  async ingest(dataflowId: string, seriesKey: string, title: string, customSeriesId?: string) {
+    let url = `${SUPABASE_URL}/functions/v1/fetch-ecb?action=ingest&dataflowId=${encodeURIComponent(dataflowId)}&seriesKey=${encodeURIComponent(seriesKey)}&title=${encodeURIComponent(title)}`;
+    if (customSeriesId) {
+      url += `&seriesId=${encodeURIComponent(customSeriesId)}`;
+    }
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
