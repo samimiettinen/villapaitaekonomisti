@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { FeaturedIndicatorCard, FeaturedIndicator } from "./FeaturedIndicatorCard";
-import { fredApi, statfinApi } from "@/lib/api";
+import { fredApi, statfinApi, ecbApi } from "@/lib/api";
 
 // Featured indicators configuration
 // To add new indicators:
@@ -51,6 +51,18 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
     seriesId: "FRED_FEDFUNDS",
     label: "Federal Funds Rate",
     source: "FRED",
+    currency: "original",
+  },
+  {
+    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EURIBOR3MD__SP",
+    label: "3-Month Euribor",
+    source: "ECB",
+    currency: "original",
+  },
+  {
+    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EONIA_HSTA__SP",
+    label: "ECB Deposit Rate (€STR)",
+    source: "ECB",
     currency: "original",
   },
   {
@@ -109,6 +121,22 @@ const STATFIN_CONFIGS = [
   }
 ];
 
+// ECB ingest configurations
+const ECB_CONFIGS = [
+  {
+    dataflowId: "FM",
+    seriesKey: "M.U2.EUR.4F.MM.EURIBOR3MD_.SP",
+    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EURIBOR3MD__SP",
+    title: "3-Month Euribor Rate"
+  },
+  {
+    dataflowId: "FM",
+    seriesKey: "M.U2.EUR.4F.MM.EONIA.HSTA.SP",
+    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EONIA_HSTA__SP",
+    title: "ECB Deposit Facility Rate (€STR proxy)"
+  }
+];
+
 // For backwards compatibility
 const STATFIN_GDP_CONFIG = STATFIN_CONFIGS[0];
 
@@ -158,10 +186,24 @@ export const EconomicDashboard = () => {
         }
       }
 
+      // Refresh ECB indicators
+      for (const config of ECB_CONFIGS) {
+        try {
+          console.log(`Refreshing ${config.seriesId}...`);
+          await ecbApi.ingest(config.dataflowId, config.seriesKey, config.title);
+          successCount++;
+          await delay(2000);
+        } catch (err) {
+          console.error(`Failed to refresh ${config.seriesId}:`, err);
+          errorCount++;
+          await delay(3000);
+        }
+      }
+
       if (errorCount === 0) {
         toast({
           title: "Data refreshed successfully",
-          description: `Updated ${successCount} indicators from FRED and StatFin.`,
+          description: `Updated ${successCount} indicators from FRED, StatFin, and ECB.`,
         });
       } else {
         toast({
@@ -191,7 +233,7 @@ export const EconomicDashboard = () => {
         <div>
           <h2 className="text-2xl font-bold text-foreground">Economic Dashboard</h2>
           <p className="text-sm text-muted-foreground">
-            Key macroeconomic indicators updated from FRED and StatFin
+            Key macroeconomic indicators updated from FRED, StatFin, and ECB
           </p>
         </div>
         <Button 
@@ -219,8 +261,8 @@ export const EconomicDashboard = () => {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p>
-            This dashboard displays key economic indicators from the Federal Reserve Economic Data (FRED) 
-            and Statistics Finland (StatFin) databases.
+            This dashboard displays key economic indicators from the Federal Reserve Economic Data (FRED), 
+            Statistics Finland (StatFin), and the European Central Bank (ECB) databases.
           </p>
           <p>
             Each card shows the latest value, percentage change from the previous period, and a sparkline 
@@ -235,4 +277,4 @@ export const EconomicDashboard = () => {
   );
 };
 
-export { FEATURED_INDICATORS, FRED_SERIES_IDS, STATFIN_CONFIGS, STATFIN_GDP_CONFIG };
+export { FEATURED_INDICATORS, FRED_SERIES_IDS, STATFIN_CONFIGS, ECB_CONFIGS, STATFIN_GDP_CONFIG };
