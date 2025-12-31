@@ -27,13 +27,15 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
     seriesId: "FRED_CPIAUCSL",
     label: "US Consumer Price Index",
     source: "FRED",
-    currency: "USD",
+    currency: "original",
+    isInflationIndex: true,
   },
   {
     seriesId: "STATFIN_CPI",
     label: "Finnish CPI",
     source: "STATFIN",
     currency: "original",
+    isInflationIndex: true,
   },
   {
     seriesId: "FRED_UNRATE",

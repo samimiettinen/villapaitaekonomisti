@@ -11,6 +11,7 @@ export interface FeaturedIndicator {
   label: string;
   source: "FRED" | "STATFIN" | "ECB" | "EUROSTAT" | "OECD" | "WORLDBANK";
   currency?: "original" | "EUR" | "USD";
+  isInflationIndex?: boolean; // If true, calculates YoY inflation rate
 }
 
 interface SeriesMetadata {
@@ -60,13 +61,14 @@ export const FeaturedIndicatorCard = ({ indicator }: { indicator: FeaturedIndica
         if (indicator.currency === "EUR") valueColumn = "value_eur";
         if (indicator.currency === "USD") valueColumn = "value_usd";
 
-        // Fetch last 12 observations for sparkline
+        // Fetch more observations for YoY calculation (need 13+ months for inflation calc)
+        const fetchLimit = indicator.isInflationIndex ? 24 : 12;
         const { data: obsData, error: obsError } = await supabase
           .from("observations")
           .select(`date, ${valueColumn}`)
           .eq("series_id", indicator.seriesId)
           .order("date", { ascending: false })
-          .limit(12);
+          .limit(fetchLimit);
 
         if (obsError) throw obsError;
 
@@ -121,12 +123,36 @@ export const FeaturedIndicatorCard = ({ indicator }: { indicator: FeaturedIndica
 
   const latestValue = observations.length > 0 ? observations[observations.length - 1]?.value : null;
   const previousValue = observations.length > 1 ? observations[observations.length - 2]?.value : null;
-  const change = latestValue && previousValue ? ((latestValue - previousValue) / previousValue) * 100 : null;
   const latestDate = observations.length > 0 ? observations[observations.length - 1]?.date : null;
 
-  const TrendIcon = change === null ? Minus : change >= 0 ? TrendingUp : TrendingDown;
-  const trendColor = change === null ? "text-muted-foreground" : change >= 0 ? "text-green-600" : "text-red-600";
-  const sparklineColor = change === null ? "hsl(var(--muted-foreground))" : change >= 0 ? "hsl(142 76% 36%)" : "hsl(0 84% 60%)";
+  // Calculate YoY inflation for CPI indices
+  let yoyInflation: number | null = null;
+  if (indicator.isInflationIndex && observations.length >= 13 && latestValue !== null) {
+    // Find observation from ~12 months ago
+    const latestDateObj = new Date(latestDate!);
+    const yearAgoTarget = new Date(latestDateObj);
+    yearAgoTarget.setFullYear(yearAgoTarget.getFullYear() - 1);
+    
+    // Find closest observation to 12 months ago
+    const yearAgoObs = observations.find((obs) => {
+      const obsDate = new Date(obs.date);
+      const monthsDiff = (latestDateObj.getFullYear() - obsDate.getFullYear()) * 12 
+        + (latestDateObj.getMonth() - obsDate.getMonth());
+      return monthsDiff >= 11 && monthsDiff <= 13 && obs.value !== null;
+    });
+    
+    if (yearAgoObs?.value) {
+      yoyInflation = ((latestValue - yearAgoObs.value) / yearAgoObs.value) * 100;
+    }
+  }
+
+  // For inflation indices, show YoY change; otherwise show period-over-period
+  const displayChange = indicator.isInflationIndex ? yoyInflation : 
+    (latestValue && previousValue ? ((latestValue - previousValue) / previousValue) * 100 : null);
+
+  const TrendIcon = displayChange === null ? Minus : displayChange >= 0 ? TrendingUp : TrendingDown;
+  const trendColor = displayChange === null ? "text-muted-foreground" : displayChange >= 0 ? "text-red-600" : "text-green-600"; // Inverted for inflation - lower is better
+  const sparklineColor = displayChange === null ? "hsl(var(--muted-foreground))" : displayChange >= 0 ? "hsl(0 84% 60%)" : "hsl(142 76% 36%)";
 
   const formatValue = (val: number | null) => {
     if (val === null) return "—";
@@ -165,7 +191,9 @@ export const FeaturedIndicatorCard = ({ indicator }: { indicator: FeaturedIndica
             <div className="flex items-center gap-1 mt-1">
               <TrendIcon className={`h-3 w-3 ${trendColor}`} />
               <span className={`text-xs font-medium ${trendColor}`}>
-                {change !== null ? `${change >= 0 ? "+" : ""}${change.toFixed(2)}%` : "—"}
+                {displayChange !== null 
+                  ? `${displayChange >= 0 ? "+" : ""}${displayChange.toFixed(2)}%${indicator.isInflationIndex ? " YoY" : ""}` 
+                  : "—"}
               </span>
             </div>
           </div>
