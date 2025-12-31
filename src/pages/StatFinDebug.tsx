@@ -42,7 +42,8 @@ const StatFinDebug = () => {
         STATFIN_GDP_CONFIG.tablePath,
         STATFIN_GDP_CONFIG.query,
         STATFIN_GDP_CONFIG.seriesId,
-        STATFIN_GDP_CONFIG.title
+        STATFIN_GDP_CONFIG.title,
+        STATFIN_GDP_CONFIG.language
       );
       setIngestResult(result);
       // After ingesting, fetch the data
