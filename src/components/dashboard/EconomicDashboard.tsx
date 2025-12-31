@@ -30,9 +30,21 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
     currency: "USD",
   },
   {
+    seriesId: "STATFIN_CPI",
+    label: "Finnish CPI",
+    source: "STATFIN",
+    currency: "original",
+  },
+  {
     seriesId: "FRED_UNRATE",
     label: "US Unemployment Rate",
     source: "FRED",
+    currency: "original",
+  },
+  {
+    seriesId: "STATFIN_UNEMPLOYMENT",
+    label: "Finnish Unemployment Rate",
+    source: "STATFIN",
     currency: "original",
   },
   {
@@ -58,25 +70,47 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
 // FRED series IDs for refresh functionality
 const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DEXUSEU"];
 
-// StatFin GDP ingest configuration
-const STATFIN_GDP_CONFIG = {
-  tablePath: "StatFin/vtp/statfin_vtp_pxt_11sf.px",
-  seriesId: "STATFIN_GDP",
-  title: "Finnish GDP, current prices, million EUR",
-  query: {
-    query: [
-      {
-        code: "Taloustoimi",
-        selection: { filter: "item", values: ["B1GMH"] } // GDP at market prices
-      },
-      {
-        code: "Tiedot",
-        selection: { filter: "item", values: ["CP"] } // Current prices
-      }
-    ],
-    response: { format: "json" }
+// StatFin ingest configurations
+const STATFIN_CONFIGS = [
+  {
+    tablePath: "StatFin/vtp/statfin_vtp_pxt_11sf.px",
+    seriesId: "STATFIN_GDP",
+    title: "Finnish GDP, current prices, million EUR",
+    query: {
+      query: [
+        { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } },
+        { code: "Tiedot", selection: { filter: "item", values: ["CP"] } }
+      ],
+      response: { format: "json" }
+    }
+  },
+  {
+    tablePath: "StatFin/khi/statfin_khi_pxt_11xq.px",
+    seriesId: "STATFIN_CPI",
+    title: "Finnish Consumer Price Index (2020=100)",
+    query: {
+      query: [
+        { code: "Hyödyke", selection: { filter: "item", values: ["0"] } } // Total index
+      ],
+      response: { format: "json" }
+    }
+  },
+  {
+    tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
+    seriesId: "STATFIN_UNEMPLOYMENT",
+    title: "Finnish Unemployment Rate, %",
+    query: {
+      query: [
+        { code: "Sukupuoli", selection: { filter: "item", values: ["SSS"] } }, // Both sexes
+        { code: "Tiedot", selection: { filter: "item", values: ["Tyottomyysaste"] } }
+      ],
+      response: { format: "json" }
+    }
   }
-};
+];
+
+// For backwards compatibility
+const STATFIN_GDP_CONFIG = STATFIN_CONFIGS[0];
 
 export const EconomicDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
@@ -105,19 +139,23 @@ export const EconomicDashboard = () => {
         }
       }
 
-      // Refresh StatFin GDP
-      try {
-        console.log("Refreshing StatFin GDP...");
-        await statfinApi.ingest(
-          STATFIN_GDP_CONFIG.tablePath,
-          STATFIN_GDP_CONFIG.query,
-          STATFIN_GDP_CONFIG.seriesId,
-          STATFIN_GDP_CONFIG.title
-        );
-        successCount++;
-      } catch (err) {
-        console.error("Failed to refresh StatFin GDP:", err);
-        errorCount++;
+      // Refresh StatFin indicators
+      for (const config of STATFIN_CONFIGS) {
+        try {
+          console.log(`Refreshing ${config.seriesId}...`);
+          await statfinApi.ingest(
+            config.tablePath,
+            config.query,
+            config.seriesId,
+            config.title
+          );
+          successCount++;
+          await delay(2000);
+        } catch (err) {
+          console.error(`Failed to refresh ${config.seriesId}:`, err);
+          errorCount++;
+          await delay(3000);
+        }
       }
 
       if (errorCount === 0) {
@@ -197,4 +235,4 @@ export const EconomicDashboard = () => {
   );
 };
 
-export { FEATURED_INDICATORS, FRED_SERIES_IDS, STATFIN_GDP_CONFIG };
+export { FEATURED_INDICATORS, FRED_SERIES_IDS, STATFIN_CONFIGS, STATFIN_GDP_CONFIG };
