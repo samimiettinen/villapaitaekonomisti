@@ -54,14 +54,14 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
     currency: "original",
   },
   {
-    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EURIBOR3MD__SP",
+    seriesId: "ECB_EURIBOR_3M",
     label: "3-Month Euribor",
     source: "ECB",
     currency: "original",
   },
   {
-    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EONIA_HSTA__SP",
-    label: "ECB Deposit Rate (€STR)",
+    seriesId: "ECB_DFR",
+    label: "ECB Deposit Facility Rate",
     source: "ECB",
     currency: "original",
   },
@@ -85,20 +85,21 @@ const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DE
 // StatFin ingest configurations - use Finnish language API for Finnish codes
 const STATFIN_CONFIGS = [
   {
-    tablePath: "StatFin/vtp/statfin_vtp_pxt_11sf.px",
+    // Use quarterly GDP table which is simpler
+    tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     seriesId: "STATFIN_GDP",
-    title: "Finnish GDP, current prices, million EUR",
-    language: "fi", // Use Finnish API because codes are in Finnish
+    title: "Finnish GDP, quarterly, million EUR",
+    language: "fi",
     query: {
       query: [
-        { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } },
-        { code: "Tiedot", selection: { filter: "item", values: ["CP"] } }
+        { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } }, // GDP
+        { code: "Tiedot", selection: { filter: "item", values: ["cp_eur"] } } // Current prices EUR
       ],
       response: { format: "json" }
     }
   },
   {
-    tablePath: "StatFin/khi/statfin_khi_pxt_11xb.px", // Use 11xb table (2015=100) for cleaner single series
+    tablePath: "StatFin/khi/statfin_khi_pxt_11xb.px",
     seriesId: "STATFIN_CPI",
     title: "Finnish Consumer Price Index (2015=100)",
     language: "fi",
@@ -111,32 +112,34 @@ const STATFIN_CONFIGS = [
     }
   },
   {
-    tablePath: "StatFin/tyti/statfin_tyti_pxt_135y.px", // Use 135y table (simpler structure)
+    // Use simpler monthly unemployment rate table
+    tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
     seriesId: "STATFIN_UNEMPLOYMENT",
     title: "Finnish Unemployment Rate, %",
     language: "fi",
     query: {
       query: [
-        { code: "Tiedot", selection: { filter: "item", values: ["Tyottomyysaste"] } }
+        { code: "Sukupuoli", selection: { filter: "item", values: ["SSS"] } }, // Both sexes
+        { code: "Tiedot", selection: { filter: "item", values: ["tyottomyysaste"] } } // Unemployment rate
       ],
       response: { format: "json" }
     }
   }
 ];
 
-// ECB ingest configurations
+// ECB ingest configurations - use correct series keys
 const ECB_CONFIGS = [
   {
     dataflowId: "FM",
-    seriesKey: "M.U2.EUR.4F.MM.EURIBOR3MD_.SP",
-    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EURIBOR3MD__SP",
+    seriesKey: "M.U2.EUR.RT.MM.EURIBOR3MD_.HSTA", // 3-month Euribor monthly average
+    seriesId: "ECB_EURIBOR_3M",
     title: "3-Month Euribor Rate"
   },
   {
     dataflowId: "FM",
-    seriesKey: "M.U2.EUR.4F.MM.EONIA.HSTA.SP",
-    seriesId: "ECB_FM_M_U2_EUR_4F_MM_EONIA_HSTA__SP",
-    title: "ECB Deposit Facility Rate (€STR proxy)"
+    seriesKey: "B.U2.EUR.4F.KR.DFR.LEV", // ECB Deposit Facility Rate
+    seriesId: "ECB_DFR",
+    title: "ECB Deposit Facility Rate"
   }
 ];
 

@@ -122,18 +122,18 @@ function detectFrequency(timeValues: string[]): string {
 
 /**
  * Flatten PxWeb response to observations array
- * Only works for single-value queries (one non-time dimension combo)
+ * Deduplicate by date - if multiple values exist for same date, take the first one
  */
 function flattenPxWebToObservations(
   data: PxWebDataResponse,
   metadata: PxWebMetadata,
   seriesId: string
 ): Array<{ series_id: string; date: string; value: number | null; value_eur: number | null }> {
-  const observations: Array<{ series_id: string; date: string; value: number | null; value_eur: number | null }> = [];
+  const observationMap = new Map<string, { series_id: string; date: string; value: number | null; value_eur: number | null }>();
   
   if (!data.data || !Array.isArray(data.data)) {
     console.log("No data array in PxWeb response");
-    return observations;
+    return [];
   }
   
   const { index: timeIndex, variable: timeVar } = findTimeVariable(metadata.variables);
@@ -164,6 +164,11 @@ function flattenPxWebToObservations(
       return;
     }
     
+    // Skip if we already have an observation for this date (deduplicate)
+    if (observationMap.has(date)) {
+      return;
+    }
+    
     // Parse value (handle ".." as null)
     const rawValue = item.values[0];
     let value: number | null = null;
@@ -174,7 +179,7 @@ function flattenPxWebToObservations(
       }
     }
     
-    observations.push({
+    observationMap.set(date, {
       series_id: seriesId,
       date,
       value,
@@ -182,7 +187,8 @@ function flattenPxWebToObservations(
     });
   });
   
-  console.log(`Flattened ${observations.length} observations`);
+  const observations = Array.from(observationMap.values());
+  console.log(`Flattened ${observations.length} observations (deduplicated from ${data.data.length} items)`);
   return observations;
 }
 
