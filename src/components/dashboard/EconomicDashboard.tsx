@@ -82,12 +82,13 @@ const FEATURED_INDICATORS: FeaturedIndicator[] = [
 // FRED series IDs for refresh functionality
 const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DEXUSEU"];
 
-// StatFin ingest configurations
+// StatFin ingest configurations - use Finnish language API for Finnish codes
 const STATFIN_CONFIGS = [
   {
     tablePath: "StatFin/vtp/statfin_vtp_pxt_11sf.px",
     seriesId: "STATFIN_GDP",
     title: "Finnish GDP, current prices, million EUR",
+    language: "fi", // Use Finnish API because codes are in Finnish
     query: {
       query: [
         { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } },
@@ -97,23 +98,25 @@ const STATFIN_CONFIGS = [
     }
   },
   {
-    tablePath: "StatFin/khi/statfin_khi_pxt_11xq.px",
+    tablePath: "StatFin/khi/statfin_khi_pxt_11xb.px", // Use 11xb table (2015=100) for cleaner single series
     seriesId: "STATFIN_CPI",
-    title: "Finnish Consumer Price Index (2020=100)",
+    title: "Finnish Consumer Price Index (2015=100)",
+    language: "fi",
     query: {
       query: [
-        { code: "Hyödyke", selection: { filter: "item", values: ["0"] } } // Total index
+        { code: "Hyödyke", selection: { filter: "item", values: ["0"] } },
+        { code: "Tiedot", selection: { filter: "item", values: ["indeksipisteluku"] } }
       ],
       response: { format: "json" }
     }
   },
   {
-    tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
+    tablePath: "StatFin/tyti/statfin_tyti_pxt_135y.px", // Use 135y table (simpler structure)
     seriesId: "STATFIN_UNEMPLOYMENT",
     title: "Finnish Unemployment Rate, %",
+    language: "fi",
     query: {
       query: [
-        { code: "Sukupuoli", selection: { filter: "item", values: ["SSS"] } }, // Both sexes
         { code: "Tiedot", selection: { filter: "item", values: ["Tyottomyysaste"] } }
       ],
       response: { format: "json" }
@@ -175,7 +178,8 @@ export const EconomicDashboard = () => {
             config.tablePath,
             config.query,
             config.seriesId,
-            config.title
+            config.title,
+            config.language
           );
           successCount++;
           await delay(2000);

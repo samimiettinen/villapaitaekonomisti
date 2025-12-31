@@ -91,10 +91,13 @@ export const statfinApi = {
     return await response.json();
   },
 
-  async ingest(tablePath: string, query: any, seriesId?: string, title?: string) {
+  async ingest(tablePath: string, query: any, seriesId?: string, title?: string, language?: string) {
     let url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=ingest&tablePath=${encodeURIComponent(tablePath)}`;
     if (seriesId) {
       url += `&seriesId=${encodeURIComponent(seriesId)}`;
+    }
+    if (language) {
+      url += `&language=${encodeURIComponent(language)}`;
     }
     const response = await fetch(url, {
       method: "POST",
