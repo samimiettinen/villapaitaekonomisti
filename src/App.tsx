@@ -9,6 +9,7 @@ import Analysis from "./pages/Analysis";
 import FredExplorer from "./pages/FredExplorer";
 import DataExplorer from "./pages/DataExplorer";
 import StatFinDashboard from "./pages/StatFinDashboard";
+import StatFinDebug from "./pages/StatFinDebug";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/fred" element={<FredExplorer />} />
           <Route path="/explore" element={<DataExplorer />} />
           <Route path="/statfin" element={<StatFinDashboard />} />
+          <Route path="/statfin-debug" element={<StatFinDebug />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

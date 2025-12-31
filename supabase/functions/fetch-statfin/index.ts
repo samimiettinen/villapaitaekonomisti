@@ -18,6 +18,174 @@ interface PxWebQuery {
   };
 }
 
+interface PxWebVariable {
+  code: string;
+  text: string;
+  values: string[];
+  valueTexts: string[];
+  time?: boolean;
+}
+
+interface PxWebMetadata {
+  title: string;
+  variables: PxWebVariable[];
+  updated?: string;
+  source?: string;
+}
+
+interface PxWebDataItem {
+  key: string[];
+  values: string[];
+}
+
+interface PxWebDataResponse {
+  columns?: Array<{ code: string; text: string; type: string; unit?: string }>;
+  comments?: any[];
+  data?: PxWebDataItem[];
+}
+
+/**
+ * Find the time variable in metadata
+ */
+function findTimeVariable(variables: PxWebVariable[]): { index: number; variable: PxWebVariable | null } {
+  const idx = variables.findIndex(
+    (v) =>
+      v.time === true ||
+      v.code.toLowerCase().includes('vuosi') ||
+      v.code.toLowerCase().includes('aika') ||
+      v.code.toLowerCase().includes('kuukausi') ||
+      v.code.toLowerCase().includes('neljännes') ||
+      v.code.toLowerCase() === 'year' ||
+      v.code.toLowerCase() === 'time' ||
+      v.code.toLowerCase() === 'quarter' ||
+      v.code.toLowerCase() === 'month' ||
+      (v.values.length > 0 && /^\d{4}/.test(v.values[0]))
+  );
+  return { index: idx, variable: idx >= 0 ? variables[idx] : null };
+}
+
+/**
+ * Convert StatFin time values to ISO date format
+ * - Annual: 2020 -> 2020-01-01
+ * - Quarterly: 2020Q1 or 2020K1 -> 2020-01-01, Q2->04-01, Q3->07-01, Q4->10-01
+ * - Monthly: 2020M01 or 2020-01 -> 2020-01-01
+ */
+function normalizeTimeToISO(timeKey: string): string {
+  if (!timeKey) return '';
+  
+  // Quarterly format: 2024Q1, 2024K1, 2024Q3
+  const quarterMatch = timeKey.match(/^(\d{4})[QK](\d)$/i);
+  if (quarterMatch) {
+    const year = quarterMatch[1];
+    const quarter = parseInt(quarterMatch[2]);
+    const monthMap: Record<number, string> = { 1: '01', 2: '04', 3: '07', 4: '10' };
+    const month = monthMap[quarter] || '01';
+    return `${year}-${month}-01`;
+  }
+  
+  // Monthly format: 2024M01
+  const monthMatch = timeKey.match(/^(\d{4})M(\d{2})$/i);
+  if (monthMatch) {
+    return `${monthMatch[1]}-${monthMatch[2]}-01`;
+  }
+  
+  // Monthly format: 2024-01
+  const monthDashMatch = timeKey.match(/^(\d{4})-(\d{2})$/);
+  if (monthDashMatch) {
+    return `${monthDashMatch[1]}-${monthDashMatch[2]}-01`;
+  }
+  
+  // Already ISO format: 2024-01-01
+  if (/^\d{4}-\d{2}-\d{2}$/.test(timeKey)) {
+    return timeKey;
+  }
+  
+  // Annual format: 2024 -> 2024-01-01
+  if (/^\d{4}$/.test(timeKey)) {
+    return `${timeKey}-01-01`;
+  }
+  
+  // Fallback: return as is
+  return timeKey;
+}
+
+/**
+ * Determine frequency from time values
+ */
+function detectFrequency(timeValues: string[]): string {
+  if (timeValues.length === 0) return 'A';
+  const sample = timeValues[0];
+  if (/[QK]\d/i.test(sample)) return 'Q';
+  if (/M\d{2}/i.test(sample) || /^\d{4}-\d{2}$/.test(sample)) return 'M';
+  return 'A';
+}
+
+/**
+ * Flatten PxWeb response to observations array
+ * Only works for single-value queries (one non-time dimension combo)
+ */
+function flattenPxWebToObservations(
+  data: PxWebDataResponse,
+  metadata: PxWebMetadata,
+  seriesId: string
+): Array<{ series_id: string; date: string; value: number | null; value_eur: number | null }> {
+  const observations: Array<{ series_id: string; date: string; value: number | null; value_eur: number | null }> = [];
+  
+  if (!data.data || !Array.isArray(data.data)) {
+    console.log("No data array in PxWeb response");
+    return observations;
+  }
+  
+  const { index: timeIndex, variable: timeVar } = findTimeVariable(metadata.variables);
+  console.log(`Time variable found at index ${timeIndex}:`, timeVar?.code);
+  
+  if (timeIndex < 0) {
+    console.warn("No time variable found in metadata, attempting position-based extraction");
+  }
+  
+  // Build lookup for time values -> ISO dates
+  const timeValueToISO: Record<string, string> = {};
+  if (timeVar) {
+    timeVar.values.forEach((val) => {
+      timeValueToISO[val] = normalizeTimeToISO(val);
+    });
+  }
+  
+  // Process each data item
+  data.data.forEach((item) => {
+    if (!item.key || !item.values || item.values.length === 0) return;
+    
+    // Get time value from the key at timeIndex, or assume first key is time
+    const timeKey = timeIndex >= 0 ? item.key[timeIndex] : item.key[0];
+    const date = timeValueToISO[timeKey] || normalizeTimeToISO(timeKey);
+    
+    if (!date) {
+      console.warn("Could not parse date from:", timeKey);
+      return;
+    }
+    
+    // Parse value (handle ".." as null)
+    const rawValue = item.values[0];
+    let value: number | null = null;
+    if (rawValue !== '..' && rawValue !== '.' && rawValue !== '' && rawValue !== null && rawValue !== undefined) {
+      const parsed = parseFloat(rawValue);
+      if (!isNaN(parsed)) {
+        value = parsed;
+      }
+    }
+    
+    observations.push({
+      series_id: seriesId,
+      date,
+      value,
+      value_eur: value, // StatFin data is in EUR
+    });
+  });
+  
+  console.log(`Flattened ${observations.length} observations`);
+  return observations;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -45,7 +213,6 @@ Deno.serve(async (req) => {
     // List tables in a database
     if (action === "tables") {
       let databasePath = url.searchParams.get("databasePath") || "StatFin";
-      // Remove leading/trailing slashes to avoid double slashes in URL
       databasePath = databasePath.replace(/^\/+|\/+$/g, '');
       
       const apiUrl = `${pxwebBaseUrl}/${databasePath}`;
@@ -70,9 +237,7 @@ Deno.serve(async (req) => {
       if (!tablePath) {
         throw new Error("tablePath required");
       }
-      // Remove leading slashes
       tablePath = tablePath.replace(/^\/+/, '');
-      // Prepend StatFin if path doesn't include a database prefix
       if (!tablePath.includes("/") || !["StatFin", "Check", "Hyvinvointialueet", "Kokeelliset_tilastot", "Kuntien_avainluvut", "Kuntien_talous_ja_toiminta", "Maahanmuuttajat_ja_kotoutuminen", "NOVI-fi", "Postinumeroalueittainen_avoin_tieto", "SDG", "StatFin_Passiivi"].some(db => tablePath!.startsWith(db))) {
         tablePath = `StatFin/${tablePath}`;
       }
@@ -99,9 +264,7 @@ Deno.serve(async (req) => {
       if (!tablePath) {
         throw new Error("tablePath required");
       }
-      // Remove leading slashes
       tablePath = tablePath.replace(/^\/+/, '');
-      // Prepend StatFin if path doesn't include a database prefix
       if (!tablePath.includes("/") || !["StatFin", "Check", "Hyvinvointialueet", "Kokeelliset_tilastot", "Kuntien_avainluvut", "Kuntien_talous_ja_toiminta", "Maahanmuuttajat_ja_kotoutuminen", "NOVI-fi", "Postinumeroalueittainen_avoin_tieto", "SDG", "StatFin_Passiivi"].some(db => tablePath!.startsWith(db))) {
         tablePath = `StatFin/${tablePath}`;
       }
@@ -132,21 +295,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Ingest table into database
+    // Ingest table into database - IMPROVED VERSION
     if (action === "ingest") {
       let tablePath = url.searchParams.get("tablePath");
+      const seriesIdParam = url.searchParams.get("seriesId"); // Optional custom series ID
+      
       if (!tablePath) {
         throw new Error("tablePath required");
       }
-      // Remove leading slashes
       tablePath = tablePath.replace(/^\/+/, '');
-      // Prepend StatFin if path doesn't include a database prefix
       if (!tablePath.includes("/") || !["StatFin", "Check", "Hyvinvointialueet", "Kokeelliset_tilastot", "Kuntien_avainluvut", "Kuntien_talous_ja_toiminta", "Maahanmuuttajat_ja_kotoutuminen", "NOVI-fi", "Postinumeroalueittainen_avoin_tieto", "SDG", "StatFin_Passiivi"].some(db => tablePath!.startsWith(db))) {
         tablePath = `StatFin/${tablePath}`;
       }
 
       const body = await req.json();
       const query: PxWebQuery = body.query;
+      const customTitle = body.title as string | undefined;
 
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -155,14 +319,16 @@ Deno.serve(async (req) => {
       const apiUrl = `${pxwebBaseUrl}/${tablePath}`;
       console.log("Ingesting from:", apiUrl);
 
-      // Fetch metadata
+      // Fetch metadata first
       const metaResponse = await fetch(apiUrl);
       if (!metaResponse.ok) {
         const errorText = await metaResponse.text();
         console.error("StatFin metadata error:", metaResponse.status, errorText);
         throw new Error(`StatFin API returned ${metaResponse.status}: ${errorText}`);
       }
-      const metadata = await metaResponse.json();
+      const metadata: PxWebMetadata = await metaResponse.json();
+      console.log("Metadata title:", metadata.title);
+      console.log("Variables:", metadata.variables?.map(v => `${v.code} (${v.values.length} values)`).join(', '));
 
       // Fetch data
       const dataResponse = await fetch(apiUrl, {
@@ -178,69 +344,87 @@ Deno.serve(async (req) => {
         console.error("StatFin data error:", dataResponse.status, errorText);
         throw new Error(`StatFin API returned ${dataResponse.status}: ${errorText}`);
       }
-      const data = await dataResponse.json();
+      const data: PxWebDataResponse = await dataResponse.json();
+      console.log("Data items received:", data.data?.length || 0);
 
-      // Extract series ID and title from metadata
-      const seriesId = `STATFIN_${tablePath.replace(/\//g, "_")}`;
-      const title = metadata.title || tablePath;
+      // Generate series ID
+      const seriesId = seriesIdParam || `STATFIN_${tablePath.replace(/\//g, "_").replace(/\.px$/, '')}`;
+      const title = customTitle || metadata.title || tablePath;
 
-      // Insert or update series
+      // Detect frequency from time variable
+      const { variable: timeVar } = findTimeVariable(metadata.variables);
+      const freq = timeVar ? detectFrequency(timeVar.values) : 'A';
+
+      // Extract unit from response columns or metadata
+      const unit = data.columns?.find(c => c.type === 'c')?.unit || 
+                   data.columns?.find(c => c.type === 'c')?.text || 
+                   null;
+
+      // Upsert series
       const { error: seriesError } = await supabase.from("series").upsert({
         id: seriesId,
         source: "STATFIN",
         provider_id: tablePath,
         title: title,
-        description: null,
-        freq: null,
-        unit_original: data.columns?.[0]?.unit || null,
+        description: metadata.source || null,
+        freq: freq,
+        unit_original: unit,
         currency_orig: "EUR",
         geo: "FI",
       });
 
-      if (seriesError) throw seriesError;
+      if (seriesError) {
+        console.error("Series upsert error:", seriesError);
+        throw seriesError;
+      }
+      console.log("Series upserted:", seriesId);
 
-      // Parse observations from PxWeb JSON format
-      const observations: Array<{ date: string; value: number }> = [];
+      // Flatten observations
+      const observations = flattenPxWebToObservations(data, metadata, seriesId);
       
-      if (data.data) {
-        data.data.forEach((item: any) => {
-          if (item.key && item.values) {
-            // Extract date from key (format depends on PxWeb structure)
-            const dateKey = item.key[0] || "";
-            const value = parseFloat(item.values[0]);
-            
-            if (!isNaN(value)) {
-              observations.push({
-                date: dateKey,
-                value: value,
-              });
-            }
-          }
-        });
+      if (observations.length === 0) {
+        console.warn("No observations extracted from data");
+        return new Response(
+          JSON.stringify({
+            success: true,
+            seriesId,
+            observationCount: 0,
+            warning: "No observations could be extracted from the data",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // Insert observations
-      if (observations.length > 0) {
-        const obsToInsert = observations.map((obs) => ({
-          series_id: seriesId,
-          date: obs.date,
-          value: obs.value,
-          value_eur: obs.value,
-          value_usd: null,
-        }));
+      // Log first few observations for debugging
+      console.log("Sample observations:", observations.slice(0, 3));
 
+      // Upsert observations in batches
+      const batchSize = 500;
+      let insertedCount = 0;
+      
+      for (let i = 0; i < observations.length; i += batchSize) {
+        const batch = observations.slice(i, i + batchSize);
         const { error: obsError } = await supabase
           .from("observations")
-          .upsert(obsToInsert, { onConflict: "series_id,date" });
+          .upsert(batch, { onConflict: "series_id,date" });
 
-        if (obsError) throw obsError;
+        if (obsError) {
+          console.error("Observations upsert error:", obsError);
+          throw obsError;
+        }
+        insertedCount += batch.length;
       }
+
+      console.log(`Upserted ${insertedCount} observations for ${seriesId}`);
 
       return new Response(
         JSON.stringify({
           success: true,
           seriesId,
-          observationCount: observations.length,
+          title,
+          freq,
+          observationCount: insertedCount,
+          sampleDates: observations.slice(0, 5).map(o => o.date),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

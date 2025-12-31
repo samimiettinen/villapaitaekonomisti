@@ -91,8 +91,31 @@ export const statfinApi = {
     return await response.json();
   },
 
-  async ingest(tablePath: string, query: any) {
-    const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=ingest&tablePath=${encodeURIComponent(tablePath)}`;
+  async ingest(tablePath: string, query: any, seriesId?: string, title?: string) {
+    let url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=ingest&tablePath=${encodeURIComponent(tablePath)}`;
+    if (seriesId) {
+      url += `&seriesId=${encodeURIComponent(seriesId)}`;
+    }
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ query, title }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to ingest table");
+    }
+    
+    return await response.json();
+  },
+
+  async fetchData(tablePath: string, query: any) {
+    const url = `${SUPABASE_URL}/functions/v1/fetch-statfin?action=data&tablePath=${encodeURIComponent(tablePath)}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -105,7 +128,7 @@ export const statfinApi = {
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || "Failed to ingest table");
+      throw new Error(error.error || "Failed to fetch data");
     }
     
     return await response.json();
