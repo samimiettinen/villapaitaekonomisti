@@ -115,14 +115,15 @@ const STATFIN_CONFIGS = [
     }
   },
   {
-    // Monthly unemployment - table 135z has Kuukausi and Tiedot only
+    // Monthly unemployment - table 135z has Kuukausi and Tiedot dimensions
     tablePath: "StatFin/tyti/statfin_tyti_pxt_135z.px",
     seriesId: "STATFIN_UNEMPLOYMENT",
     title: "Finnish Unemployment Rate, %",
     language: "fi",
     query: {
       query: [
-        { code: "Tiedot", selection: { filter: "item", values: ["Työttömyysaste"] } } // Unemployment rate
+        { code: "Kuukausi", selection: { filter: "all", values: ["*"] } }, // All months
+        { code: "Tiedot", selection: { filter: "item", values: ["Tyottomyysaste"] } } // Unemployment rate (no special chars)
       ],
       response: { format: "json" }
     }
