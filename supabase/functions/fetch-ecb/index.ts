@@ -159,21 +159,39 @@ Deno.serve(async (req) => {
 
       // Use custom seriesId if provided, otherwise generate from dataflow/key
       const seriesId = customSeriesId || `ECB_${dataflowId}_${seriesKey.replace(/\./g, "_")}`;
+      const providerId = `${dataflowId}/${seriesKey}`;
       
       console.log("ECB ingest:", { dataflowId, seriesKey, seriesId, title });
 
-      // Insert series metadata
+      // Check if series exists with this provider_id (may have different id)
+      const { data: existingSeries } = await supabase
+        .from("series")
+        .select("id")
+        .eq("source", "ECB")
+        .eq("provider_id", providerId)
+        .maybeSingle();
+
+      // If exists with different ID, delete the old one first to avoid conflict
+      if (existingSeries && existingSeries.id !== seriesId) {
+        console.log(`Replacing series ${existingSeries.id} with ${seriesId}`);
+        // Delete old observations first
+        await supabase.from("observations").delete().eq("series_id", existingSeries.id);
+        // Delete old series
+        await supabase.from("series").delete().eq("id", existingSeries.id);
+      }
+
+      // Upsert series metadata using id as conflict target
       const { error: seriesError } = await supabase.from("series").upsert({
         id: seriesId,
         source: "ECB",
-        provider_id: `${dataflowId}/${seriesKey}`,
+        provider_id: providerId,
         title: title,
         description: `ECB ${dataflowId} series`,
         freq: null,
         unit_original: null,
         currency_orig: "EUR",
         geo: "EU",
-      });
+      }, { onConflict: "id" });
 
       if (seriesError) throw seriesError;
 
