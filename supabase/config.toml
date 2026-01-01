@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.fetch-statfin]
 verify_jwt = false
 
+[functions.fetch-statfin-births]
+verify_jwt = false
+
 [functions.fetch-ecb]
 verify_jwt = false
 
