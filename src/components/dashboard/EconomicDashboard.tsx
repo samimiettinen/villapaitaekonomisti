@@ -87,7 +87,7 @@ const FRED_SERIES_IDS = ["GDPC1", "CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "DE
 // StatFin ingest configurations - use Finnish language API for Finnish codes
 const STATFIN_CONFIGS = [
   {
-    // Quarterly GDP table - need to include Vuosineljännes dimension
+    // Quarterly GDP table - use correct StatFin variable codes
     tablePath: "StatFin/ntp/statfin_ntp_pxt_132h.px",
     seriesId: "STATFIN_GDP",
     title: "Finnish GDP, quarterly, million EUR",
@@ -95,8 +95,8 @@ const STATFIN_CONFIGS = [
     query: {
       query: [
         { code: "Vuosineljännes", selection: { filter: "all", values: ["*"] } }, // All quarters
-        { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } }, // GDP
-        { code: "Tiedot", selection: { filter: "item", values: ["CP_MEUR"] } } // Current prices, million EUR
+        { code: "Taloustoimi", selection: { filter: "item", values: ["B1GMH"] } }, // GDP at market prices
+        { code: "Tiedot", selection: { filter: "item", values: ["tasmcp"] } } // Original series, current prices, million EUR
       ],
       response: { format: "json" }
     }
