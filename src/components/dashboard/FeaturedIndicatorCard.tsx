@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-
+import { TrendingUp, TrendingDown, Minus, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 export interface FeaturedIndicator {
   seriesId: string;
   label: string;
@@ -162,6 +162,24 @@ export const FeaturedIndicatorCard = ({ indicator }: { indicator: FeaturedIndica
     return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  // Calculate data freshness
+  const getDataFreshness = () => {
+    const now = new Date();
+    const updated = new Date(metadata.updated_at);
+    const daysSinceUpdate = Math.floor((now.getTime() - updated.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysSinceUpdate <= 7) {
+      return { status: "fresh", icon: CheckCircle2, color: "text-green-600", label: "Fresh", description: `Updated ${daysSinceUpdate === 0 ? "today" : daysSinceUpdate === 1 ? "yesterday" : `${daysSinceUpdate} days ago`}` };
+    } else if (daysSinceUpdate <= 30) {
+      return { status: "stale", icon: AlertCircle, color: "text-yellow-600", label: "Stale", description: `Updated ${daysSinceUpdate} days ago` };
+    } else {
+      return { status: "outdated", icon: XCircle, color: "text-red-600", label: "Outdated", description: `Updated ${daysSinceUpdate} days ago` };
+    }
+  };
+
+  const freshness = getDataFreshness();
+  const FreshnessIcon = freshness.icon;
+
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
@@ -223,12 +241,28 @@ export const FeaturedIndicatorCard = ({ indicator }: { indicator: FeaturedIndica
               year: 'numeric' 
             }) : "—"}
           </span>
-          <span>
-            Updated: {new Date(metadata.updated_at).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric'
-            })}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className={`flex items-center gap-1 cursor-help ${freshness.color}`}>
+                  <FreshnessIcon className="h-3 w-3" />
+                  <span className="text-xs font-medium">{freshness.label}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{freshness.description}</p>
+                <p className="text-muted-foreground">
+                  Last updated: {new Date(metadata.updated_at).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>
